@@ -1,0 +1,41 @@
+# 100-step warm-start expert-LoRA experiment.
+#
+# Same shape as lora_v9_targetparams_100step.yaml (r=32 non-expert, r=8 expert),
+# but the 232 non-expert tensors are copied from runs/train/lora_v9 at start and
+# FROZEN, so only the routed-expert target_parameters ParamWrappers train.
+#
+# Goal: confirm whether expert-LoRA can add signal on bit_manipulation /
+# equation_transformation without destroying v9's text_encryption (which the
+# from-scratch 100-step r=8 adapter collapsed to 0%).
+model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+lora:
+  r: 32
+  lora_alpha: 32
+  target_modules: ".*\\.(in_proj|out_proj|up_proj|down_proj|gate_proj|q_proj|k_proj|v_proj|o_proj)$"
+  target_parameters:
+    - "mixer.experts.up_proj"
+    - "mixer.experts.down_proj"
+  rank_pattern:
+    "mixer.experts.up_proj": 8
+    "mixer.experts.down_proj": 8
+  alpha_pattern:
+    "mixer.experts.up_proj": 8
+    "mixer.experts.down_proj": 8
+  lora_dropout: 0.0
+  bias: "none"
+  task_type: "CAUSAL_LM"
+  warm_start_adapter: runs/train/lora_v9
+  freeze_warm_start: true
+training:
+  learning_rate: 3.0e-4
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.05
+  bf16: true
+  max_seq_length: 8192
+  gradient_checkpointing: true
+data:
+  train_file: datasets/processed/train_formatted_v9.jsonl
+  eval_file: datasets/splits/dev_frozen.jsonl
+output_dir: runs/train/lora_v9_warm_start_100step

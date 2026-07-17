@@ -1,0 +1,40 @@
+# 100-step stability test for routed-expert LoRA via PEFT target_parameters.
+#
+# Rank choice:
+#   * Default r=32 (lora_alpha=32 → scaling=1) for non-expert modules — matches v9 production.
+#   * rank_pattern + alpha_pattern set r=8, alpha=8 (scaling=1) for the 3D experts.
+# Both modules share scaling=1, so vLLM's uniform `scaling = lora_alpha / r` (computed from
+# the global r=32 / alpha=32 in adapter_config.json — vLLM ignores rank_pattern/alpha_pattern)
+# is correct WITHOUT any baking step in the converter. Per-expert tensors are split-only.
+#
+# Size projection (fp32): ~108 MiB non-expert + ~817 MiB expert ≈ 925 MiB unzipped, ~820 MiB
+# zipped. Comfortably under Kaggle's 1.5 GB cap.
+model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+lora:
+  r: 32
+  lora_alpha: 32
+  target_modules: ".*\\.(in_proj|out_proj|up_proj|down_proj|gate_proj|q_proj|k_proj|v_proj|o_proj)$"
+  target_parameters:
+    - "mixer.experts.up_proj"
+    - "mixer.experts.down_proj"
+  rank_pattern:
+    "mixer.experts.up_proj": 8
+    "mixer.experts.down_proj": 8
+  alpha_pattern:
+    "mixer.experts.up_proj": 8
+    "mixer.experts.down_proj": 8
+  lora_dropout: 0.0
+  bias: "none"
+  task_type: "CAUSAL_LM"
+training:
+  learning_rate: 3.0e-4
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.05    # short run — small warmup
+  bf16: true
+  max_seq_length: 8192
+data:
+  train_file: datasets/processed/train_formatted_v9.jsonl
+  eval_file: datasets/splits/dev_frozen.jsonl
+output_dir: runs/train/lora_v9_targetparams_100step

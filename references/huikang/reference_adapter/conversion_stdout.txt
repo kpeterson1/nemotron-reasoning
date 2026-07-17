@@ -1,0 +1,25 @@
+base_model.model.model.layers.0.mixer: SVD kept 4.48/5.94 (75.4%) of singular value mass
+base_model.model.model.layers.11.mixer: SVD kept 3.93/5.23 (75.2%) of singular value mass
+base_model.model.model.layers.14.mixer: SVD kept 3.98/5.31 (75.0%) of singular value mass
+base_model.model.model.layers.16.mixer: SVD kept 4.06/5.39 (75.3%) of singular value mass
+base_model.model.model.layers.18.mixer: SVD kept 3.95/5.25 (75.2%) of singular value mass
+base_model.model.model.layers.2.mixer: SVD kept 3.98/5.09 (78.1%) of singular value mass
+base_model.model.model.layers.21.mixer: SVD kept 4.04/5.35 (75.4%) of singular value mass
+base_model.model.model.layers.23.mixer: SVD kept 4.15/5.50 (75.4%) of singular value mass
+base_model.model.model.layers.25.mixer: SVD kept 4.20/5.66 (74.3%) of singular value mass
+base_model.model.model.layers.28.mixer: SVD kept 4.58/5.97 (76.8%) of singular value mass
+base_model.model.model.layers.30.mixer: SVD kept 4.78/6.26 (76.5%) of singular value mass
+base_model.model.model.layers.32.mixer: SVD kept 4.27/5.69 (75.1%) of singular value mass
+base_model.model.model.layers.35.mixer: SVD kept 5.02/6.63 (75.7%) of singular value mass
+base_model.model.model.layers.37.mixer: SVD kept 5.17/6.83 (75.7%) of singular value mass
+base_model.model.model.layers.39.mixer: SVD kept 4.85/6.73 (72.1%) of singular value mass
+base_model.model.model.layers.4.mixer: SVD kept 3.64/4.71 (77.3%) of singular value mass
+base_model.model.model.layers.41.mixer: SVD kept 4.20/5.41 (77.5%) of singular value mass
+base_model.model.model.layers.44.mixer: SVD kept 4.99/6.54 (76.4%) of singular value mass
+base_model.model.model.layers.46.mixer: SVD kept 4.81/6.46 (74.4%) of singular value mass
+base_model.model.model.layers.48.mixer: SVD kept 4.97/6.50 (76.5%) of singular value mass
+base_model.model.model.layers.50.mixer: SVD kept 4.68/6.15 (76.1%) of singular value mass
+base_model.model.model.layers.7.mixer: SVD kept 4.04/5.24 (77.1%) of singular value mass
+base_model.model.model.layers.9.mixer: SVD kept 4.10/5.30 (77.4%) of singular value mass
+
+Converted 418 trained tensors → 12010 output tensors

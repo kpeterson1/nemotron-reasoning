@@ -1,0 +1,37 @@
+# 10-step bounded speed probe — same config as the 100-step expert run, but with
+# gradient_checkpointing=False. Goal: measure step time with full activations held.
+# Risk: PEFT ParamWrapper materializes a 3D delta_weight per MoE layer via einsum.
+# At fp32, each layer's delta is (128, 1856, 2688) ≈ 2.6 GB, × 23 layers × 2 (up + down)
+# = ~120 GB if all are alive in the backward graph. With gc off they will be — so OOM
+# on the GB10's 119 GB unified memory is a real possibility. We treat OOM as a valid
+# probe outcome.
+model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+lora:
+  r: 32
+  lora_alpha: 32
+  target_modules: ".*\\.(in_proj|out_proj|up_proj|down_proj|gate_proj|q_proj|k_proj|v_proj|o_proj)$"
+  target_parameters:
+    - "mixer.experts.up_proj"
+    - "mixer.experts.down_proj"
+  rank_pattern:
+    "mixer.experts.up_proj": 8
+    "mixer.experts.down_proj": 8
+  alpha_pattern:
+    "mixer.experts.up_proj": 8
+    "mixer.experts.down_proj": 8
+  lora_dropout: 0.0
+  bias: "none"
+  task_type: "CAUSAL_LM"
+training:
+  learning_rate: 3.0e-4
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.0          # no warmup — too few steps to bother
+  bf16: true
+  max_seq_length: 4096
+  gradient_checkpointing: false   # ← the lever under test
+data:
+  train_file: datasets/processed/train_formatted_v9.jsonl
+  eval_file: datasets/splits/dev_frozen.jsonl
+output_dir: runs/train/lora_v9_targetparams_gcoff_probe

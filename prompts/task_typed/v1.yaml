@@ -1,0 +1,66 @@
+name: task_typed
+version: v1
+description: "Per-task-type templates with domain-specific reasoning hints."
+templates:
+  bit_manipulation:
+    template: |
+      {problem}
+
+      Hints for bit manipulation puzzles:
+      - The output is a binary string of the same length as the input.
+      - Consider operations like XOR, AND, OR, NOT, bit shifts (left/right),
+        bitwise rotations, or per-position transformations.
+      - Test candidate rules on every provided example before committing.
+
+      Put your final answer inside \boxed{}.
+  text_encryption:
+    template: |
+      {problem}
+
+      Hints for text encryption puzzles:
+      - Build a character substitution mapping from the examples.
+      - Common patterns: Caesar shifts, rotation ciphers, position-dependent
+        substitutions, reverse-text variants, alphabet permutations.
+      - Verify the mapping is consistent across all examples.
+
+      Put your final answer inside \boxed{}.
+  numeral_conversion:
+    template: |
+      {problem}
+
+      Hints for numeral conversion puzzles:
+      - Identify the numeral system used (binary, octal, hex, base-N, Roman, etc.).
+      - Convert the input to/from base-10 as the intermediate step.
+      - Watch for non-standard digit symbols and case sensitivity.
+
+      Put your final answer inside \boxed{}.
+  unit_conversion:
+    template: |
+      {problem}
+
+      Hints for unit conversion puzzles:
+      - Calculate the ratio output/input from each example to find the conversion factor.
+      - Average or median the ratios to absorb floating-point noise.
+      - Apply the same factor to the test input.
+
+      Put your final answer inside \boxed{}.
+  gravitational_constant:
+    template: |
+      {problem}
+
+      Hints for gravitational-constant puzzles:
+      - Use d = 0.5 * g * t^2 and solve for g from the examples.
+      - Confirm g is consistent across the provided examples.
+      - Apply that g to the test input to predict the missing value.
+
+      Put your final answer inside \boxed{}.
+  equation_transformation:
+    template: |
+      {problem}
+
+      Hints for equation transformation puzzles:
+      - Map each input symbol/operator to its output counterpart.
+      - Look for symbol substitutions, operator swaps, or structural rewrites.
+      - Verify the mapping against every example before applying it.
+
+      Put your final answer inside \boxed{}.

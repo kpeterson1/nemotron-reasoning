@@ -1,0 +1,21 @@
+# LoRA config v2 (post-pilot, post-competitive-intelligence corrections)
+model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+lora:
+  r: 32
+  lora_alpha: 32           # was 16; effective scale alpha/r = 1.0
+  target_modules: ".*\\.(in_proj|out_proj|up_proj|down_proj|gate_proj|q_proj|k_proj|v_proj|o_proj)$"   # adds attention q/k/v/o (6 layers) + MoE gate_proj if present
+  lora_dropout: 0.0        # was 0.05
+  bias: "none"
+  task_type: "CAUSAL_LM"
+training:
+  learning_rate: 3.0e-4    # was 5e-5; standard LoRA LR
+  num_epochs: 1            # 1 epoch first; we'll evaluate before deciding on epoch 2
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.1
+  bf16: true
+  max_seq_length: 8192     # was 1300; matches harness max_model_len
+data:
+  train_file: datasets/processed/train_formatted_v9.jsonl
+  eval_file: datasets/splits/dev_frozen.jsonl
+output_dir: runs/train/lora_v9

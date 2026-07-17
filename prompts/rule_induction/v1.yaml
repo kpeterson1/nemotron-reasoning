@@ -1,0 +1,14 @@
+name: rule_induction
+version: v1
+description: "Structured rule induction with explicit steps."
+template: |
+  {problem}
+
+  Approach this systematically:
+  1. Study the input-output examples carefully.
+  2. Identify the transformation rule or pattern.
+  3. State the rule explicitly.
+  4. Apply the rule to the given input.
+  5. Verify your answer against one of the provided examples.
+
+  Put your final answer inside \boxed{}.

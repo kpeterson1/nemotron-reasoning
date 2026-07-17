@@ -1,0 +1,10 @@
+name: direct
+version: v1
+description: "Straightforward rule induction prompt with boxed output. Used for diagnostic inference and training data generation. Note: the harness appends its own boxed instruction, so this template is for LOCAL use only."
+template: |
+  {problem}
+
+  Think step by step. First analyze the input-output examples to identify the
+  transformation rule. Then apply that rule to the given input.
+
+  Put your final answer inside \boxed{}.

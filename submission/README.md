@@ -1,0 +1,1 @@
+LoRA adapter submissions. The adapter must be rank ≤ 32, compatible with Nemotron-3-Nano-30B-A3B, and include adapter_config.json. Package as submission.zip using `make package ADAPTER=<dir>`. The Kaggle harness evaluates with temperature=1.0, max_tokens=3584, enable_thinking=True.

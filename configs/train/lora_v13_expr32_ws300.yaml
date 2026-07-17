@@ -1,0 +1,43 @@
+# +rank test (Kaggle-valid): v13 stage-2 with MoE expert rank 8 -> 32.
+# Single variable vs lora_v13_ws300 (only the expert rank/alpha). Reuses the
+# SAME stage-1 reasoning LoRA (runs/train/lora_v13) as warm-start, frozen.
+#
+# Why expert rank (not reasoning rank): the interference site is the stage-1
+# reasoning LoRA (r=32), but that is already at Kaggle's confirmed
+# max_lora_rank=32 ceiling — raising it to 64 would be non-Kaggle-valid. The
+# expert rank has headroom (8->32, still <=32) and a real mechanism: more
+# expert capacity lets bit_manip/text_enc route to specialized experts,
+# relieving the shared reasoning path. Hypothesis: text_enc recovers toward
+# 68.7% while bit_manip holds ~54%.
+model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+lora:
+  r: 32
+  lora_alpha: 32
+  target_modules: ".*\\.(in_proj|out_proj|up_proj|down_proj|gate_proj|q_proj|k_proj|v_proj|o_proj)$"
+  target_parameters:
+    - "mixer.experts.up_proj"
+    - "mixer.experts.down_proj"
+  rank_pattern:
+    "mixer.experts.up_proj": 32
+    "mixer.experts.down_proj": 32
+  alpha_pattern:
+    "mixer.experts.up_proj": 32
+    "mixer.experts.down_proj": 32
+  lora_dropout: 0.0
+  bias: "none"
+  task_type: "CAUSAL_LM"
+  warm_start_adapter: runs/train/lora_v13
+  freeze_warm_start: true
+training:
+  learning_rate: 3.0e-4
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.05
+  bf16: true
+  max_seq_length: 8192
+  gradient_checkpointing: true
+data:
+  train_file: datasets/processed/train_formatted_v13.jsonl
+  eval_file: datasets/splits/dev_frozen.jsonl
+output_dir: runs/train/lora_v13_expr32_ws300

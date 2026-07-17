@@ -1,0 +1,43 @@
+# r=4 expert-LoRA speed probe — bounded 10-step run.
+#
+# Same as lora_v9_targetparams_100step.yaml except expert rank/alpha drop 8 → 4.
+# Non-expert modules stay at r=32 / alpha=32 (scaling=1, matches v9 production).
+# Expert scaling = alpha_expert/r_expert = 4/4 = 1, identical per-module scaling to
+# the global 32/32 → converter's bake_expert = 1.0 (no-op), so the same converter
+# script handles this adapter exactly as it did the r=8 100-step adapter.
+#
+# Expert numel projection vs r=8: halves. r=8 expert size was 220.97 M params
+# (= 23 layers × 128 experts × 8 × (1856 + 2688)).  r=4 → 110.48 M params.
+# Total trainable: 27.7 M (non-expert) + 110.5 M (expert) ≈ 138.2 M (0.43%).
+# Adapter zip projection (fp32): non-expert 108 MiB + expert 416 MiB ≈ 525 MiB unzipped,
+# ~470 MiB zipped — well under 1.5 GB.
+model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+lora:
+  r: 32
+  lora_alpha: 32
+  target_modules: ".*\\.(in_proj|out_proj|up_proj|down_proj|gate_proj|q_proj|k_proj|v_proj|o_proj)$"
+  target_parameters:
+    - "mixer.experts.up_proj"
+    - "mixer.experts.down_proj"
+  rank_pattern:
+    "mixer.experts.up_proj": 4
+    "mixer.experts.down_proj": 4
+  alpha_pattern:
+    "mixer.experts.up_proj": 4
+    "mixer.experts.down_proj": 4
+  lora_dropout: 0.0
+  bias: "none"
+  task_type: "CAUSAL_LM"
+training:
+  learning_rate: 3.0e-4
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.0       # too short to warm up; we want clean step-time data
+  bf16: true
+  max_seq_length: 8192
+  gradient_checkpointing: true
+data:
+  train_file: datasets/processed/train_formatted_v9.jsonl
+  eval_file: datasets/splits/dev_frozen.jsonl
+output_dir: runs/train/lora_v9_targetparams_r4_probe

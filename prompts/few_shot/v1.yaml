@@ -1,0 +1,14 @@
+name: few_shot
+version: v1
+description: "Few-shot prompt with solved examples from same task type."
+few_shot_examples: []
+template: |
+  Here are some solved examples of similar puzzles:
+
+  {few_shot_block}
+
+  Now solve this puzzle:
+
+  {problem}
+
+  Put your final answer inside \boxed{}.

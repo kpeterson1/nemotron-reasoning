@@ -1,0 +1,33 @@
+# gc-off probe retry — same as the first probe, but grad_accum=4 (effective batch=4).
+# Per the fallback instruction. Expected to OOM identically since the first micro-batch
+# already exceeded memory in the previous run.
+model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+lora:
+  r: 32
+  lora_alpha: 32
+  target_modules: ".*\\.(in_proj|out_proj|up_proj|down_proj|gate_proj|q_proj|k_proj|v_proj|o_proj)$"
+  target_parameters:
+    - "mixer.experts.up_proj"
+    - "mixer.experts.down_proj"
+  rank_pattern:
+    "mixer.experts.up_proj": 8
+    "mixer.experts.down_proj": 8
+  alpha_pattern:
+    "mixer.experts.up_proj": 8
+    "mixer.experts.down_proj": 8
+  lora_dropout: 0.0
+  bias: "none"
+  task_type: "CAUSAL_LM"
+training:
+  learning_rate: 3.0e-4
+  num_epochs: 1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4   # was 8 — fallback per user instruction
+  warmup_ratio: 0.0
+  bf16: true
+  max_seq_length: 4096
+  gradient_checkpointing: false
+data:
+  train_file: datasets/processed/train_formatted_v9.jsonl
+  eval_file: datasets/splits/dev_frozen.jsonl
+output_dir: runs/train/lora_v9_targetparams_gcoff_probe_ga4

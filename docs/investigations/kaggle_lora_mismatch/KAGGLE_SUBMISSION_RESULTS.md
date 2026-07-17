@@ -1,0 +1,1 @@
+| 4 | v9 r32padded backbone adapter reference-matched keys shapes dtypes | reference-matched key prefix/shapes/dtypes with r32 padding | 0.58 | Still in failure band; structural parity alone did not recover local score. |

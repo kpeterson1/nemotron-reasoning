@@ -1,0 +1,5 @@
+/kaggle/working/reference/README.md	5312
+/kaggle/working/reference/__notebook__.ipynb	11739
+/kaggle/working/reference/adapter_config.json	1124
+/kaggle/working/reference/adapter_model.safetensors	3537299144
+/kaggle/working/reference/submission.zip	812182564

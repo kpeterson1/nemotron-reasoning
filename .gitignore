@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Environment
+.env
+
+# Model weights and large binaries
+*.ckpt
+*.safetensors
+*.bin
+
+# Untracked run artifacts
+runs/inference/
+runs/train/
+runs/eval/
+
+# Untracked datasets (raw, processed, synthetic — splits ARE tracked)
+datasets/raw/
+datasets/processed/
+datasets/synthetic/
+
+# Submission archives and generated submission directories
+submission/*.zip
+submission.zip
+submissions/
+
+# Local reference copy of the Kaggle metric (do not redistribute)
+docs/kaggle_metric_source.py
+
+# Optional: local-only, read-only reference solver examples (do not copy or redistribute)
+docs/reference_solvers/tonghuikang/
+
+# Large Huikang/reference artifacts
+references/huikang/**/*.safetensors
+references/huikang/**/*.zip
+
+# Local generated adapter reports
+reports/adapter_manifests/
+
+# Runtime parity investigation outputs (large JSONL, raw generations)
+reports/runtime_parity
+
+# Large Kaggle / LoRA artifacts
+*.zip
+*.safetensors
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Kaggle notebook output artifacts
+references/huikang/notebook_output/
+# local Claude Code config/permissions — never ship (commands/ stays tracked)
+.claude/settings*.json
+
+# competition data — never ship (regenerate via src/data/split.py from Kaggle train.csv)
+datasets/*.jsonl
+datasets/splits/*.jsonl
+
+# transient run output
+nohup.out
+logs/
+
+# editor/backup copies
+*.py.backup

@@ -1,0 +1,5 @@
+splits_dir: datasets/splits
+output_dir: runs/eval
+metrics:
+  - accuracy
+  - per_task_type

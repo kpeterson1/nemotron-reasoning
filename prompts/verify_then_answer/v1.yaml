@@ -1,0 +1,14 @@
+name: verify_then_answer
+version: v1
+description: "Self-verification prompt for numeric tasks."
+template: |
+  {problem}
+
+  Work through this carefully:
+  - Analyze the examples to determine the underlying rule.
+  - Apply the rule to the test input to get a candidate answer.
+  - Verify: pick one of the given examples and check that your rule
+    produces the correct output. If it doesn't, revise your rule and try again.
+  - Once verified, state your final answer.
+
+  Put your final answer inside \boxed{}.

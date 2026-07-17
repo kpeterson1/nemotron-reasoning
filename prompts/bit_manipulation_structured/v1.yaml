@@ -1,0 +1,7 @@
+name: bit_manipulation_structured
+version: v1
+description: "Structured search for bit-manipulation puzzles. Forces systematic enumeration of common bit ops instead of random hypothesis generation."
+template: |
+  For each example pair, compute: XOR, AND, OR, NOT, left shift, right shift, and rotation of the input. Compare each result against the output. Once you find the operation that matches ALL examples, apply it to the test input.
+
+  {problem}
