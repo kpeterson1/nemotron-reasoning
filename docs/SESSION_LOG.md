@@ -186,7 +186,7 @@ given the recount.
 - Confirm max_tokens falsification with real NemotronH tokenizer counts
 - Fix eval_kaggle_exact_multi.py defaults to match Kaggle Overview tab
 - Add Skipped/deferred field to SESSION_LOG.md template
-- c361a41 Step A baseline: local HF NemotronH SHA256s recorded
+- Step A baseline: local HF NemotronH SHA256s recorded
 
 ## 2026-05-26 11:56 — Step A.1 dead end + Step C result (-0.4pp / noise)
 **Branch:** kaggle-runtime-parity-v9
@@ -745,3 +745,26 @@ packaging, only traces differ). +rank (expert r32) still training in parallel.
 **Changes:** ~60 private-history git-SHA citations replaced with dates/descriptions across OPEN_QUESTIONS.md, SESSION_LOG.md, handoffs/2026-07-06-writeup-reconcile.md, observations.md (whitelist-verified per-site; problem IDs, HF revision pins, and sha256 content hashes untouched; legend notes added to OPEN_QUESTIONS + handoff). PUBLICATION_CHECKLIST P0 boxes ticked with dated resolution notes (data JSONLs removed + split.py regeneration; huikang 6 files removed + provenance stub).
 **Verified:** post-scrub whitelist grep = 0 residual SHAs in the four files.
 **Next:** rebuild ~/kaggle/nemotron-public from new HEAD, re-gate, STOP; first public push is the user's (`git push -u origin main` to the empty public repo); future public changes via branch → PR.
+
+## 2026-07-18 14:16 — web/explainer reconciled to post-publish canon; rebased onto main; 3-commit split
+**Branch:** web/explainer
+**Commits this session:**
+- (rebase) web: add retrospective explainer with log-verified numbers (T1-T4) — replayed onto main head, zero conflicts
+- web: correct explainer claims to post-publish canon (probe mechanism, text_enc chain, C7 hedge, +20.3pp, public/private LB)
+- web: un-stub repo links + huikang attribution; absolute GitHub Pages-safe hrefs
+- web: rename --indigo token to --blue (value #1d4ed8 unchanged)
+**Claimed:** web/index.html carried pre-correction claims: a fabricated −0.69 logprob threshold as the probe mechanism (writeup defines divergence as gold token rank > 1); the text_enc 68.7→54.2 drop collapsed to one variable (corrected chain: 68.7 v9 → 56.6 v11 interference-only → 53.0 v12 two-variable → 54.2 v13 revert, ≤3.6pp isolable to char-by-char); "dominant cause" overclaim on C7; +20.2pp vs canonical +20.3pp; all scores unlabeled public-LB; private 0.604 / rank 3488/4182 absent; huikang attribution stubbed. Also claimed zero dead file paths in the HTML.
+**Verified:** rebase safety via `git merge-tree --write-tree main web/explainer` (clean tree, main never touches web/); every audited number against docs/writeup.md + RESULTS.md + OPEN_QUESTIONS.md on main (0.694 local, +1.0pp net, 25.3pp swing, 0.55/0.56/0.57/0.58 ladder, mixed-rank 0.56→0.57–0.58); the 2026-06-13 matrix date against SESSION_LOG lines 650/658/664 and OPEN_QUESTIONS C10 (kept); cited paths exist on main via `git cat-file -e` / ls-tree; commit partition purity by grep over the three staged diffs (no hrefs in c1, no --blue outside c3); final tree byte-identical to the user-reviewed diff via `cmp`.
+**Assumed:** GitHub Pages will serve from this repo's public mirror so absolute blob/main URLs resolve (repo is public per writeup §9); "C8 v13's 0.55 = naive-packaged submission" read from OPEN_QUESTIONS C8 text, not re-derived from submission artifacts.
+**Next:** push web/explainer (needs --force-with-lease; origin diverged at the rebase), then user-run GitHub Pages deploy and a browser pass over the hero tri-stat responsive layout (new repeat(3) grid, untested visually).
+**Skipped / deferred:** no visual/browser verification of the edited page (text-only edits reviewed as diffs); footer "prototype" tag removed per approval — revisit if the page should still be marked pre-final; citation block has no URL field (add the Pages URL once it exists); explainer_prompt.txt and other untracked session files left untracked.
+
+## 2026-07-22 08:16 — writeup restructured around three-ceilings thesis; README rewritten as explainer
+**Branch:** web/explainer
+**Commits this session:**
+- docs: restructure writeup around three-ceilings thesis; README becomes explainer
+**Claimed:** README.md (not web/index.html) is the right explainer/report target — the repo's accessible entry point for the recruiter/new-engineer audience; the old README project tree was stale (configs/openclaw listed but absent); the writeup's ~3.5B and README's ~3B active-param figures are both convention-dependent derivations the model config cannot arbitrate; the §5 trace excerpts initially pulled from train_formatted_v9/v13.jsonl were solver-generated text wrapping competition-derived binary strings (row id present in raw train.csv).
+**Verified:** every path cited in both docs exists (20 checked); all 19 relative links resolve and all 5 README→writeup anchor fragments match GitHub-slugged headings (scripted check); hedge-survival grep confirmed every required qualifier post-restructure (Spark 2 attribution inferred ×3, 0.17.1 user-reported, "a dominant contributor not the sole cause" ×2+README, C2 untested ×3, "uncommitted, contemporaneous", ≈11pp inferred, public/private caveat, ±0.5pp ×3); model config read from HF cache (no explicit active-param field; ≈2.8B excl. / ≈3.5B incl. embeddings by derivation); excerpt provenance checked via source field + train.csv id join; replacement excerpts generated by running bit_manip_trace_v4/v5 + bit_manip_solver_v3 on synthetic pairs in a scratchpad venv (numpy; PEP 668 blocks user install); grep confirms no original competition-row bit strings remain; layout block checked against actual tree (src/solvers is an empty stub — solvers live in src/data).
+**Assumed:** "9,500 rule-induction puzzles" carried forward on user's confirmation against the competition row count (not independently re-counted); GitHub's Mermaid rendering for the new pipeline diagram (not renderable locally); public-repo README divergence (user-reported: it has its own drifted tree) — this session edited the dev README only.
+**Next:** follow-up pass on web/index.html to harmonize "~3.5B active" with the A3B phrasing now used in both markdown docs; user to sync the public repo's README in a separate PR; consider trimming the writeup's ~840-word growth if reviewers find it long.
+**Skipped / deferred:** markdownlint not run (not installed; npx would download — structural checks scripted instead); web/index.html untouched this session per approval (its writeup links are anchor-free so the heading restructure cannot break them, but its "~3.5B" figure now diverges from both markdown docs); internal-only dirs (handoffs/, logs/, web/, submissions/) intentionally omitted from the README layout block; scratchpad venv is session-temporary and was not added to the repo.

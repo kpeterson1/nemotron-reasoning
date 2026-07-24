@@ -2,9 +2,9 @@
 
 Third-party reference material used during the competition. Nothing in this
 directory is our work; see per-entry provenance and licensing notes below.
-**Licensing review is a pre-publication gate** (see `docs/PUBLICATION_CHECKLIST.md`)
-— do not make this repo public before resolving redistribution rights for
-tracked third-party content.
+Third-party content whose redistribution rights could not be established was
+removed before publication; the per-entry notes below record what was removed
+and where to recover it from the original public sources.
 
 ## Cited sources
 

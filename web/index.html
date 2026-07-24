@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nemotron Reasoning Retrospective | Trace-Learnability Diagnostics</title>
+<meta name="description" content="A forensic retrospective on fine-tuning a LoRA adapter for Nemotron-3-Nano in the NVIDIA Reasoning Challenge: method-first, confound-caught, honestly reversed.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root{
+    /* canvas */
+    --paper:#f6f8fb;
+    --panel:#ffffff;
+    --panel-cool:#f0f5fb;
+    /* ink */
+    --ink:#101826;
+    --muted:#5a6b83;
+    --quiet:#93a1b5;
+    /* structural */
+    --line:#dde5ef;
+    --line-strong:#b9cbe6;
+    /* spectrum: slate -> cyan -> true blue */
+    --slate:#334155;
+    --cyan:#0891b2;
+    --blue:#1d4ed8;
+    /* semantic — reserved, never decorative */
+    --amber:#d97706;      /* reversal / refuted */
+    --amber-bg:#fef6e9;
+    --green:#15803d;      /* verified / confirmed */
+    --green-bg:#eefaf1;
+    --infer:#0369a1;      /* inferred */
+    --assume:#94a3b8;     /* assumed */
+    --shadow:0 14px 34px rgba(30,41,89,0.08);
+    --mono:"JetBrains Mono","SFMono-Regular",Consolas,monospace;
+    --body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --display:"Space Grotesk","Inter",sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;color:var(--ink);
+    background:
+      radial-gradient(circle at 14% 8%, rgba(29,78,216,0.06), transparent 40%),
+      radial-gradient(circle at 90% 82%, rgba(8,145,178,0.06), transparent 44%),
+      var(--paper);
+    font-family:var(--body);line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;text-underline-offset:4px;text-decoration-thickness:1px;}
+  img{max-width:100%;display:block;}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:0 26px;}
+
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(34px);
+    transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1);}
+  .reveal.visible{opacity:1;transform:none;}
+  @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none;}}
+
+  /* topbar */
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:100;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:18px 26px;font-family:var(--mono);font-size:.76rem;
+    background:rgba(246,248,251,.35);backdrop-filter:blur(14px) saturate(160%);
+    -webkit-backdrop-filter:blur(14px) saturate(160%);
+    border-bottom:1px solid transparent;transition:.3s;}
+  .topbar.scrolled{background:rgba(246,248,251,.72);
+    border-bottom:1px solid rgba(221,229,239,.7);box-shadow:0 2px 14px rgba(16,24,38,.05);padding:13px 26px;}
+  .brandmark{font-family:var(--display);font-weight:600;font-size:1.15rem;letter-spacing:-.01em;text-decoration:none;
+    display:inline-flex;gap:6px;align-items:baseline;}
+  .brandmark .tag{font-family:var(--mono);font-size:.6rem;color:var(--cyan);font-weight:500;}
+  .topnav{display:flex;gap:20px;align-items:center;}
+  .topnav a{text-decoration:none;color:var(--muted);transition:color .2s;}
+  .topnav a:hover{color:var(--blue);}
+  @media(max-width:820px){.topnav{display:none;}}
+
+  /* hero */
+  .hero{padding-top:150px;padding-bottom:70px;}
+  .kicker{display:inline-block;font-family:var(--mono);font-size:.72rem;font-weight:600;
+    text-transform:uppercase;letter-spacing:.14em;color:var(--cyan);
+    padding:6px 12px;border:1px solid var(--line-strong);border-radius:999px;background:var(--panel);}
+  .hero h1{margin:24px 0 16px;font-family:var(--display);font-weight:600;
+    font-size:clamp(2.9rem,6.4vw,5.1rem);line-height:0.98;letter-spacing:-.025em;max-width:900px;
+    background:linear-gradient(104deg,var(--slate) 0%,var(--cyan) 46%,var(--blue) 100%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .hero-sub{max-width:680px;color:#33405a;font-size:clamp(1.02rem,1.6vw,1.22rem);line-height:1.55;font-weight:400;}
+  .hero-actions{display:flex;flex-wrap:wrap;gap:11px;margin-top:30px;}
+  .button{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:11px 20px;
+    font-family:var(--mono);font-size:.76rem;font-weight:600;text-decoration:none;
+    border:1px solid var(--line-strong);border-radius:999px;background:var(--panel);
+    transition:transform .18s ease,box-shadow .18s ease,background .18s;}
+  .button:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(29,78,216,.14);}
+  .button.primary{color:#fff;border-color:transparent;
+    background:linear-gradient(135deg,var(--blue),var(--cyan));}
+
+  /* hero tri-stat — gain, leaderboard, runtime swing */
+  .gapstat{margin-top:52px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;
+    align-items:stretch;background:var(--panel);border:1px solid var(--line);
+    border-radius:18px;box-shadow:var(--shadow);overflow:hidden;}
+  .gapstat .cell{padding:26px 30px;}
+  .gapstat .cell+.cell{border-left:1px solid var(--line);}
+  .gapstat .lbl{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;
+    letter-spacing:.1em;color:var(--quiet);}
+  .gapstat .num{font-family:var(--display);font-weight:600;font-size:2.5rem;line-height:1;margin-top:6px;letter-spacing:-.02em;}
+  .gapstat .num.good{color:var(--green);}
+  .gapstat .num.flat{color:var(--slate);}
+  .gapstat .num.swing{color:var(--cyan);}
+  .gapstat .caption{font-family:var(--mono);font-size:.62rem;color:var(--muted);margin-top:6px;}
+  @media(max-width:640px){.gapstat{grid-template-columns:1fr;}
+    .gapstat .cell+.cell{border-left:none;border-top:1px solid var(--line);}}
+
+  /* sections */
+  section{padding-top:64px;padding-bottom:64px;border-top:1px solid var(--line);}
+  .eyebrow{font-family:var(--mono);color:var(--blue);font-size:.74rem;font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;}
+  h2{margin:12px 0 0;font-family:var(--display);font-weight:600;font-size:clamp(1.9rem,3.4vw,2.5rem);
+    line-height:1.05;letter-spacing:-.018em;color:var(--ink);max-width:760px;}
+  .lede{margin:14px 0 0;color:var(--muted);font-size:1.04rem;max-width:720px;}
+  .body-copy{margin:22px 0 0;max-width:720px;color:#28344a;}
+  .body-copy p{margin:0 0 14px;}
+
+  /* generic panel grid */
+  .grid{display:grid;gap:14px;margin-top:26px;}
+  .grid.two{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .grid.three{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .grid.four{grid-template-columns:repeat(4,minmax(0,1fr));}
+  @media(max-width:820px){.grid.three,.grid.four{grid-template-columns:repeat(2,minmax(0,1fr));}}
+  @media(max-width:560px){.grid.two,.grid.three,.grid.four{grid-template-columns:1fr;}}
+
+  .panel{padding:20px;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 4px rgba(16,24,38,.04);transition:transform .18s,border-color .18s,box-shadow .18s;}
+  .panel:hover{transform:translateY(-3px);border-color:var(--line-strong);box-shadow:0 10px 26px rgba(29,78,216,.09);}
+  .panel .plabel{display:block;font-family:var(--mono);font-size:.7rem;font-weight:600;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--blue);margin-bottom:8px;}
+  .panel p{margin:0;color:var(--muted);font-size:.94rem;}
+  .panel .big{font-family:var(--display);font-weight:600;font-size:1.9rem;line-height:1;color:var(--ink);margin-bottom:4px;}
+
+  /* SIGNATURE 1 — Reversal callout */
+  .reversal{margin-top:26px;padding:22px 24px;border-radius:14px;
+    background:var(--amber-bg);border:1px solid #f0d9ad;border-left:4px solid var(--amber);}
+  .reversal .rtag{font-family:var(--mono);font-size:.68rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.1em;color:var(--amber);display:inline-flex;align-items:center;gap:7px;}
+  .reversal .rtag::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber);}
+  .reversal .old{margin:12px 0 4px;color:#9a7a3c;text-decoration:line-through;
+    text-decoration-color:rgba(217,119,6,.5);font-size:.98rem;}
+  .reversal .new{margin:0;color:var(--ink);font-weight:500;font-size:1.02rem;}
+  .reversal .new::before{content:"→ ";color:var(--amber);font-family:var(--mono);}
+
+  /* SIGNATURE 2 — parity table */
+  .parity{margin-top:26px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel);}
+  .parity table{border-collapse:collapse;width:100%;font-size:.9rem;}
+  .parity th,.parity td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--line);}
+  .parity th{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--quiet);font-weight:600;background:var(--panel-cool);}
+  .parity tr:last-child td{border-bottom:none;}
+  .parity td.claim{color:#28344a;}
+  .state{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:.72rem;font-weight:600;}
+  .state::before{content:"";width:9px;height:9px;border-radius:50%;}
+  .state.confirmed{color:var(--green);}.state.confirmed::before{background:var(--green);}
+  .state.inferred{color:var(--infer);}.state.inferred::before{background:var(--infer);}
+  .state.assumed{color:var(--assume);}.state.assumed::before{background:var(--assume);}
+
+  /* SIGNATURE 3 — version divergence bars (same weights, diff runtime) */
+  .divergence{margin-top:26px;padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:14px;}
+  .divergence .dtitle{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px;}
+  .divergence .dnote{font-size:.86rem;color:var(--quiet);margin-bottom:20px;}
+  .dbar{display:grid;grid-template-columns:150px 1fr 56px;align-items:center;gap:14px;margin-bottom:12px;}
+  .dbar .dlab{font-family:var(--mono);font-size:.76rem;color:var(--ink);}
+  .dbar .dlab small{display:block;color:var(--quiet);font-size:.66rem;}
+  .dtrack{height:22px;background:var(--panel-cool);border-radius:6px;overflow:hidden;}
+  .dfill{height:100%;border-radius:6px;transition:width 1s cubic-bezier(.16,1,.3,1);width:0;}
+  .dbar .dval{font-family:var(--mono);font-size:.82rem;font-weight:600;text-align:right;}
+
+  .chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;}
+  .chip{font-family:var(--mono);font-size:.7rem;font-weight:500;padding:6px 11px;border-radius:999px;
+    background:var(--panel-cool);border:1px solid var(--line);color:var(--slate);}
+
+  /* citation */
+  .cite{background:var(--ink);color:#c9d4e6;border-radius:14px;padding:22px;font-family:var(--mono);
+    font-size:.82rem;margin-top:22px;overflow-x:auto;line-height:1.6;}
+  .cite .k{color:var(--cyan);}
+
+  footer{padding-top:48px;padding-bottom:60px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:.76rem;color:var(--quiet);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  footer a{text-decoration:none;color:var(--muted);}
+  footer a:hover{color:var(--blue);}
+</style>
+</head>
+<body>
+
+<nav class="topbar" id="topbar">
+  <a class="brandmark" href="#top">nemotron<span class="tag">/ retrospective</span></a>
+  <div class="topnav">
+    <a href="#premise">01 Premise</a>
+    <a href="#method">02 Method</a>
+    <a href="#validation">03 Validation</a>
+    <a href="#wall">04 Runtime Wall</a>
+    <a href="#confounds">05 Confounds</a>
+    <a href="#repo">Repo</a>
+  </div>
+</nav>
+
+<div id="top"></div>
+
+<header class="hero wrap">
+  <span class="kicker">NVIDIA Nemotron Reasoning Challenge · LoRA r≤32 · greedy eval</span>
+  <h1>The adapter learned. The runtime didn't agree.</h1>
+  <p class="hero-sub">A forensic retrospective on fine-tuning a LoRA adapter for Nemotron-3-Nano-30B-A3B-BF16 (hybrid Mamba2/MoE, ~30B total parameters, with the "A3B" suffix denoting its ~3B-class active-parameter count per token). Method-first: a trace-learnability diagnostic that worked locally, a version wall that ate the gain, and every confound caught along the way — including the ones that fooled me first.</p>
+  <div class="hero-actions">
+    <a class="button primary" href="#method">Read the method</a>
+    <a class="button" href="#confounds">Confounds caught</a>
+    <a class="button" href="#repo">Code &amp; repro</a>
+    <a class="button" href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/writeup.md">Canonical writeup ↗</a>
+  </div>
+
+  <div class="gapstat reveal">
+    <div class="cell">
+      <div class="lbl">Local validation gain</div>
+      <div class="num good">+20.3pp</div>
+      <div class="caption">bit_manipulation 33.3% → 53.6% · teacher-forced probe → derivation-first trace fix</div>
+    </div>
+    <div class="cell">
+      <div class="lbl">Best public LB</div>
+      <div class="num flat">0.58</div>
+      <div class="caption">Adapter A · public leaderboard · final private standing in §06</div>
+    </div>
+    <div class="cell">
+      <div class="lbl">Same weights, two runtimes</div>
+      <div class="num swing">25.3pp</div>
+      <div class="caption">text_encryption swing from vLLM version alone · byte-identical weights · §04</div>
+    </div>
+  </div>
+</header>
+
+<!-- 01 PREMISE -->
+<section id="premise" class="wrap">
+  <div class="eyebrow">01 / Premise</div>
+  <h2>Trace learnability beats solver coverage.</h2>
+  <p class="lede">Under greedy decoding, the binding constraint isn't whether the model <em>can</em> solve a category — it's whether the target trace is reproducible token-by-token. A solver that's 88% correct is worthless if its trace format can't be learned by a rank-32 adapter.</p>
+  <div class="body-copy">
+    <p>The competition scored six reasoning categories under greedy decoding on a frozen backbone with a LoRA adapter capped at rank 32. That framing quietly moves the problem: you're not teaching the model to reason, you're teaching a low-rank delta to reproduce a specific trace shape deterministically. Trace-format uniformity across categories matters more than per-category solver strength, because a shared adapter creates cross-task interference when formats diverge.</p>
+  </div>
+  <div class="grid three">
+    <div class="panel"><span class="plabel">Constraint</span><div class="big">r ≤ 32</div><p>Low-rank delta. Format regularity is what fits in the budget, not solver breadth.</p></div>
+    <div class="panel"><span class="plabel">Eval</span><div class="big">greedy</div><p>Token-by-token reproducibility is the pass/fail line. No sampling to hide divergence.</p></div>
+    <div class="panel"><span class="plabel">Shared</span><div class="big">1 adapter</div><p>Six categories, one LoRA. Divergent trace formats interfere through shared weights.</p></div>
+  </div>
+</section>
+
+<!-- 02 METHOD -->
+<section id="method" class="wrap">
+  <div class="eyebrow">02 / Method</div>
+  <h2>Teacher-forced logprob probing.</h2>
+  <p class="lede">A single forward pass over the ground-truth trace, checking at every position whether the gold token is still the model's argmax. The first position where it drops to rank&nbsp;&gt;&nbsp;1 is where greedy decoding is guaranteed to diverge. It diagnoses <em>format-level learnability</em>, not answer correctness.</p>
+  <div class="body-copy">
+    <p>The diagnostic move is applying teacher-forcing not to measure loss, but to localize <em>where a trace becomes un-reproducible</em> (a cousin of Tong Hui Kang's min-logprob confidence signal — provenance in §08). Run one forward pass with the reference trace forced as input. At each position, compare the model's argmax against the forced token: the first position where the ground-truth token is no longer the argmax (rank &gt; 1) is where greedy decoding will not reproduce the trace. At the divergence points we observed, the gold token's logprob sat between −0.7 and −2.3 — near-ties the model resolves in favor of a different token. Aggregating first-divergence points across a category tells you whether the failure is a solver problem or a format problem — and format problems are fixable within the rank budget.</p>
+    <p>This was a one-off post-hoc diagnostic, not a continuous pre-submission loop — an honest scoping note, since the difference matters for how much the method actually drove iteration.</p>
+  </div>
+  <div class="grid four">
+    <div class="panel"><span class="plabel">Input</span><p>Ground-truth trace, teacher-forced. One forward pass, no generation.</p></div>
+    <div class="panel"><span class="plabel">Signal</span><p>Per-token rank of the forced token — divergence is where it stops being the argmax.</p></div>
+    <div class="panel"><span class="plabel">Output</span><p>First-divergence position — where greedy is guaranteed to break.</p></div>
+    <div class="panel"><span class="plabel">Verdict</span><p>Solver gap vs format gap. Only the latter is cheap to fix.</p></div>
+  </div>
+  <div class="chip-row">
+    <span class="chip">one forward pass</span>
+    <span class="chip">divergence = rank &gt; 1</span>
+    <span class="chip">first-divergence aggregation</span>
+    <span class="chip">post-hoc, not a loop</span>
+  </div>
+</section>
+
+<!-- 03 VALIDATION -->
+<section id="validation" class="wrap">
+  <div class="eyebrow">03 / Local Validation</div>
+  <h2>The method works — locally.</h2>
+  <p class="lede">On <code>bit_manipulation</code>, the probe localized a recurring format divergence early in the trace: 44 of 47 failing traces first diverged at the rule-statement line. Rewriting the trace to derive that line — not touching the solver logic — moved local accuracy from 33.3% to 53.6% (+20.3pp). That's the proof the diagnostic points at real, addressable failures.</p>
+  <div class="body-copy">
+    <p>The probe flagged that traces diverged at a consistent structural position, not at the reasoning step. Reshaping the target trace to a derivation-first format the low-rank adapter could reproduce recovered the gain. The lever was trace format, confirming the premise: within a rank-32 budget, learnability is a formatting problem before it's a reasoning problem.</p>
+  </div>
+  <div class="grid two">
+    <div class="panel"><span class="plabel">Before · v9 traces</span><div class="big">33.3%</div><p>28/84 on the frozen dev split. Greedy divergence at a fixed structural position (rule statement). Solver was fine; format wasn't reproducible.</p></div>
+    <div class="panel" style="border-color:var(--green);background:var(--green-bg);">
+      <span class="plabel" style="color:var(--green);">After · v13, verified</span>
+      <div class="big" style="color:var(--green);">53.6%</div>
+      <p style="color:#3a6b4c;">45/84 (+20.3pp). Derivation-first trace format, same solver, only the <code>bit_manipulation</code> traces changed — the diagnostic pointed true.</p>
+    </div>
+  </div>
+  <p style="margin-top:14px;font-family:var(--mono);font-size:.72rem;color:var(--quiet);">Source: canonical dev_frozen evals (n=500, greedy, vLLM 0.20.1), <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/RESULTS.md">RESULTS.md</a> + <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/SESSION_LOG.md">docs/SESSION_LOG.md</a> 2026-06-10/12. v9→v13 is single-variable on bit_manipulation. Honest ledger: <code>text_encryption</code> paid for it, and the drop was not single-variable — 68.7% (v9) → 56.6% (v11: only the bit_manip traces changed; cross-task interference through the shared LoRA) → 53.0% (v12: a deliberate two-variable step that added a char-by-char text_enc redesign) → 54.2% (v13: char-by-char reverted, didn't recover). At most ~3.6pp is isolable to char-by-char; interference from the longer bit_manip traces did most of the damage. Net overall local: +1.0pp. On Kaggle (public LB), with identical packaging, v13 scored 0.56 vs v9's 0.58. §04–05 unpack why the local win didn't transfer.</p>
+</section>
+
+<!-- 04 RUNTIME WALL -->
+<section id="wall" class="wrap">
+  <div class="eyebrow">04 / The Runtime Wall · C7</div>
+  <h2>Identical weights, different verdicts.</h2>
+  <p class="lede">Runtime divergence is a dominant contributor to the local↔Kaggle gap — not the sole cause; packaging, stage-2 recipe differences, and other factors also contribute. But it is material: byte-identical weights produced a 25.3pp swing on <code>text_encryption</code> between two local hosts whose isolated delta was the vLLM version.</p>
+  <div class="divergence reveal" id="divergence">
+    <div class="dtitle">text_encryption · byte-identical LoRA weights (cmp-verified)</div>
+    <div class="dnote">Same adapter. Same prompts. Greedy. Truncation 0.0 on both local runs. vLLM version is the identified delta (C7, inferred).</div>
+    <div class="dbar">
+      <div class="dlab">Kaggle<small>vLLM 0.17.1 (reported)</small></div>
+      <div class="dtrack"></div>
+      <div class="dval">n/a</div>
+    </div>
+    <div class="dbar">
+      <div class="dlab">Spark 1<small>vLLM 0.20.1</small></div>
+      <div class="dtrack"><div class="dfill" data-w="68.7" style="background:linear-gradient(90deg,var(--cyan),var(--blue));"></div></div>
+      <div class="dval">68.7%</div>
+    </div>
+    <div class="dbar">
+      <div class="dlab">Spark 2<small>vLLM 0.22.1</small></div>
+      <div class="dtrack"><div class="dfill" data-w="43.4" style="background:linear-gradient(90deg,var(--slate),var(--cyan));"></div></div>
+      <div class="dval">43.4%</div>
+    </div>
+  </div>
+  <div class="body-copy">
+    <p>Kaggle's row is honest by omission: the leaderboard exposes only an overall score, never per-task accuracy — so <code>text_encryption</code> under vLLM 0.17.1 (a version user-reported from the competition, not locally verifiable) is unmeasurable. What is measurable: the fully-packaged adapter scores 0.58 on the Kaggle public LB against 0.694 locally, an ≈11pp residual attributed — inferred, not confirmed — to the same runtime-version divergence the two local bars demonstrate directly.</p>
+    <p>This reframes the whole scoreboard. Sub-1pp submission deltas are statistically meaningless against ±0.5pp non-determinism, and a runtime version gap of 25pp swamps any adapter-quality signal you think you're measuring. Version parity is a hidden variable that has to be pinned before any local result can be trusted as a Kaggle predictor.</p>
+  </div>
+</section>
+
+<!-- 05 CONFOUNDS -->
+<section id="confounds" class="wrap">
+  <div class="eyebrow">05 / Confounds Caught</div>
+  <h2>The conclusions that were wrong first.</h2>
+  <p class="lede">Single-variable discipline is the connective thread of this project. It's what let me catch three confounds that each produced a confident, wrong conclusion before the clean ablation reversed it.</p>
+
+  <div class="reversal reveal">
+    <div class="rtag">Reversal · C11</div>
+    <p class="old">The C2 converter fix regressed the score, so the bug was "load-bearing" — the scrambled weights were somehow helping.</p>
+    <p class="new">The regression was a <strong>packaging confound</strong>, not a weight effect. The "load-bearing bug" narrative was itself an artifact of an unclean submission. Named on-page rather than quietly dropped.</p>
+  </div>
+
+  <div class="reversal reveal">
+    <div class="rtag">Reversal · §6 runtime claim</div>
+    <p class="old">"This was never a runtime divergence problem" — an earlier draft's framing.</p>
+    <p class="new">Runtime divergence (C7) turned out to be the <strong>dominant</strong> gap cause. The earlier claim is reversed explicitly as a methodology beat.</p>
+  </div>
+
+  <div class="grid three">
+    <div class="panel"><span class="plabel">C2 · converter bug</span><p>Transposed <code>lora_B</code> reshape — <code>(out,r,E)</code> where it should be <code>(out,E,r)</code> — scrambled 23 MoE layers × 128 experts. Fix is math-correct; clean Kaggle effect still confounded by C11.</p></div>
+    <div class="panel"><span class="plabel">C8 · packaging</span><p>v13's naive-packaged submission scored 0.55 (public LB) — a packaging confound, not trace quality; the A-packaged v13 resubmission scored 0.56. Score movement ≠ adapter movement.</p></div>
+    <div class="panel"><span class="plabel">Phantoms</span><p><code>text_encryption</code> phantom signal and backbone-prefix rename noise — both ruled out as measurement artifacts, not real levers.</p></div>
+  </div>
+</section>
+
+<!-- 06 WHAT HELD (parity table) -->
+<section id="held" class="wrap">
+  <div class="eyebrow">06 / What Held</div>
+  <h2>What survived verification.</h2>
+  <p class="lede">Parity claims require a verification table: confirmed, inferred, or assumed — never blurred. The durable Kaggle levers were mundane and real: packaging, not traces.</p>
+  <div class="parity reveal">
+    <table>
+      <thead><tr><th>Claim</th><th>Evidence state</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td class="claim"><code>target_modules</code> must be a list, not regex, on Kaggle vLLM 0.17.1 (C9/C10) — single-variable A/B on byte-identical weights, regex 0.55 → list 0.57</td><td><span class="state confirmed">confirmed</span></td><td>+2pp public LB</td></tr>
+        <tr><td class="claim">Mixed-rank experts must be padded to r32 or declared via <code>rank_pattern</code>, or Kaggle's loader mis-applies them</td><td><span class="state confirmed">confirmed</span></td><td>0.56 → 0.57–0.58 public LB</td></tr>
+        <tr><td class="claim">Mechanism of the list lever — 0.17.1 silently under-applies a regex <code>target_modules</code></td><td><span class="state inferred">inferred</span></td><td>not run on 0.17.1 locally</td></tr>
+        <tr><td class="claim">C2 <code>lora_B</code> reshape fix is mathematically correct</td><td><span class="state confirmed">confirmed</span></td><td>round-trip verified</td></tr>
+        <tr><td class="claim">C7 runtime divergence is a dominant contributor to the local↔Kaggle gap — not the sole cause</td><td><span class="state inferred">inferred</span></td><td>25.3pp local swing · ≈11pp Kaggle residual</td></tr>
+        <tr><td class="claim">Clean isolated Kaggle effect of the C2 fix</td><td><span class="state assumed">assumed</span></td><td>untested — confounded by C11</td></tr>
+        <tr><td class="claim">Backbone-prefix rename is noise, not signal</td><td><span class="state confirmed">confirmed</span></td><td>≤1pp, sign-inconsistent across A/Bs</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:14px;font-family:var(--mono);font-size:.72rem;color:var(--quiet);">Sources: <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/RESULTS.md">RESULTS.md</a> packaging ladder (Kaggle public-LB submission matrix 2026-06-13: A backbone+list 0.58 · model.model+list 0.57 · model.model+regex 0.55, weights byte-identical) · <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/investigations/kaggle_lora_mismatch/BACKBONE_DIAGNOSTIC.md">BACKBONE_DIAGNOSTIC.md</a> §2 (prefix-only A/B) · <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/SESSION_LOG.md">docs/SESSION_LOG.md</a> C9/C10/C11 entries.</p>
+  <div class="body-copy">
+    <p>Final standing: public LB <strong>0.58</strong> · private LB <strong>0.604</strong> · rank <strong>3488/4182</strong>. Public and private are different metrics over different held-out splits; every per-submission score on this page — the ladder above included — is a public-LB value, and a public-LB delta does not necessarily predict private standing. The private split held slightly above the public one.</p>
+  </div>
+</section>
+
+<!-- 07 TAKEAWAYS -->
+<section id="takeaways" class="wrap">
+  <div class="eyebrow">07 / Takeaways</div>
+  <h2>The contribution is the discipline.</h2>
+  <p class="lede">Not the 0.58. The transferable result is a method for diagnosing format-level learnability and the experimental hygiene to keep confounds from masquerading as findings.</p>
+  <div class="grid two">
+    <div class="panel" style="grid-column:1/-1;"><span class="plabel">Loop, not diagnostic — the #1 takeaway</span><p>Huikang ran the min-logprob probe after every training run, on every trace in the training set, as a pre-submission gate; we ran it post-hoc, on a failing category. His loop produces higher signal per submission — we adopted the technique too late to close the loop, and that is the clearest retrospective regret. If you take one thing from this page, take that.</p></div>
+    <div class="panel"><span class="plabel">Method</span><p>Teacher-forced logprob probing localizes format-level greedy divergence in one forward pass — a cheap, reusable diagnostic.</p></div>
+    <div class="panel"><span class="plabel">Hygiene</span><p>Single-variable ablations caught C7, C8, and C11. Explicit on-page reversals signal rigor, not weakness.</p></div>
+    <div class="panel"><span class="plabel">Hidden variable</span><p>Runtime version parity can dominate apparent adapter quality. Pin it before trusting any local→leaderboard extrapolation.</p></div>
+    <div class="panel"><span class="plabel">Framing</span><p>Trace learnability &gt; solver coverage under greedy decoding at low rank. Format is the binding constraint.</p></div>
+  </div>
+</section>
+
+<!-- 08 REPO / CITATION -->
+<section id="repo" class="wrap">
+  <div class="eyebrow">08 / Repository &amp; Provenance</div>
+  <h2>Reproducibility.</h2>
+  <p class="lede">Public repo, Apache-2.0, with a clean provenance trail for third-party contributions.</p>
+  <div class="body-copy">
+    <p>Code &amp; docs: <a href="https://github.com/kpeterson1/nemotron-reasoning">github.com/kpeterson1/nemotron-reasoning</a> (Apache-2.0) · <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/writeup.md">canonical writeup</a> · <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/RESULTS.md">RESULTS.md</a> · <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/investigations/OPEN_QUESTIONS.md">OPEN_QUESTIONS.md</a> (corrections C1–C11).</p>
+    <p>Attribution: the min-logprob (teacher-forced) diagnostic and the character-by-character cipher decode are <strong>tonghuikang's</strong> contributions — his public writeup and midpoint Open Prize–winning repository were the structural benchmark for this work. Our application of them — post-hoc format-learnability diagnosis, and naming our own confounds — is original. Provenance for the reference copies we worked from: <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/references/README.md">references/README.md</a>.</p>
+  </div>
+  <div class="cite">
+    <span class="k">@misc</span>{peterson2026nemotron,<br>
+    &nbsp;&nbsp;title = {Trace-Learnability Diagnostics for LoRA on Nemotron-3-Nano},<br>
+    &nbsp;&nbsp;author = {Peterson, Kelly},<br>
+    &nbsp;&nbsp;year = {2026},<br>
+    &nbsp;&nbsp;note = {NVIDIA Nemotron Reasoning Challenge retrospective}<br>
+    }
+  </div>
+</section>
+
+<footer class="wrap">
+  <span>Nemotron Reasoning Retrospective · <a href="https://github.com/kpeterson1/nemotron-reasoning">repo</a> · <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/writeup.md">writeup</a></span>
+  <span><a href="#top">Back to top ↑</a> · design system re-themed from SkillOpt</span>
+</footer>
+
+<script>
+  // topbar scroll state
+  const tb=document.getElementById('topbar');
+  addEventListener('scroll',()=>tb.classList.toggle('scrolled',scrollY>24));
+
+  // reveal on scroll
+  const io=new IntersectionObserver((es)=>es.forEach(e=>{
+    if(e.isIntersecting){e.target.classList.add('visible');
+      // animate divergence bars when the block reveals
+      if(e.target.id==='divergence'){
+        e.target.querySelectorAll('.dfill').forEach(f=>f.style.width=f.dataset.w+'%');
+      }
+      io.unobserve(e.target);}
+  }),{threshold:.18});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>

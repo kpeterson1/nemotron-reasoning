@@ -121,9 +121,9 @@ over-scoring on truncated outputs via fallback extraction") is also
 falsified by the actual data. Max effect on score: 0 / 500 = 0pp.
 
 Additional finding: at max_tokens=3584 (the old `eval_kaggle_exact.py`
-default, fixed in 5a618b1), v9 dev_frozen would have truncated the
+default, fixed in the eval_kaggle_exact.py defaults fix), v9 dev_frozen would have truncated the
 **same 2 outputs**, no more — because no other outputs fall in the
-[1182, 7679] token range. So the trap fix in 5a618b1 wouldn't have
+[1182, 7679] token range. So the trap fix wouldn't have
 changed the v9 number either; it's still worth fixing because Kaggle's
 public test items may have a different token-length distribution.
 
