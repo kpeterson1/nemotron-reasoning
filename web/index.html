@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nemotron Reasoning Retrospective | Trace-Learnability Diagnostics</title>
-<meta name="description" content="A forensic retrospective on fine-tuning a LoRA adapter for Nemotron-3-Nano in the NVIDIA Reasoning Challenge: method-first, confound-caught, honestly reversed.">
+<title>Learnability Is Necessary, Not Sufficient | Nemotron Reasoning Retrospective</title>
+<meta name="description" content="A technical retrospective on trace learnability, runtime parity, and controlled ablations while fine-tuning a LoRA adapter for Nemotron-3-Nano.">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
@@ -207,12 +207,13 @@
 
 <header class="hero wrap">
   <span class="kicker">NVIDIA Nemotron Reasoning Challenge · LoRA r≤32 · greedy eval</span>
-  <h1>The adapter learned. The runtime didn't agree.</h1>
-  <p class="hero-sub">A forensic retrospective on fine-tuning a LoRA adapter for Nemotron-3-Nano-30B-A3B-BF16 (hybrid Mamba2/MoE, ~30B total parameters, with the "A3B" suffix denoting its ~3B-class active-parameter count per token). Method-first: a trace-learnability diagnostic that worked locally, a version wall that ate the gain, and every confound caught along the way — including the ones that fooled me first.</p>
+  <h1>Learnability is necessary, not sufficient.</h1>
+  <p class="hero-sub">A technical retrospective on fine-tuning a rank-32 LoRA adapter for Nemotron-3-Nano. The project separates three bottlenecks that are easy to conflate: solver coverage, token-by-token trace learnability, and inference-runtime parity.</p>
   <div class="hero-actions">
     <a class="button primary" href="#method">Read the method</a>
     <a class="button" href="#confounds">Confounds caught</a>
     <a class="button" href="#repo">Code &amp; repro</a>
+    <a class="button" href="viz/nemotron-explorer.html">3D architecture explorer</a>
     <a class="button" href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/writeup.md">Canonical writeup ↗</a>
   </div>
 
@@ -230,7 +231,7 @@
     <div class="cell">
       <div class="lbl">Same weights, two runtimes</div>
       <div class="num swing">25.3pp</div>
-      <div class="caption">text_encryption swing from vLLM version alone · byte-identical weights · §04</div>
+      <div class="caption">text_encryption swing across two local vLLM environments · byte-identical weights · attribution caveat in §04</div>
     </div>
   </div>
 </header>
@@ -238,10 +239,10 @@
 <!-- 01 PREMISE -->
 <section id="premise" class="wrap">
   <div class="eyebrow">01 / Premise</div>
-  <h2>Trace learnability beats solver coverage.</h2>
-  <p class="lede">Under greedy decoding, the binding constraint isn't whether the model <em>can</em> solve a category — it's whether the target trace is reproducible token-by-token. A solver that's 88% correct is worthless if its trace format can't be learned by a rank-32 adapter.</p>
+  <h2>Correct traces are only the first ceiling.</h2>
+  <p class="lede">Under greedy decoding, a correct solver trace still fails if the model cannot reproduce its consequential tokens in sequence. Solver coverage, trace learnability, and runtime parity must be measured separately.</p>
   <div class="body-copy">
-    <p>The competition scored six reasoning categories under greedy decoding on a frozen backbone with a LoRA adapter capped at rank 32. That framing quietly moves the problem: you're not teaching the model to reason, you're teaching a low-rank delta to reproduce a specific trace shape deterministically. Trace-format uniformity across categories matters more than per-category solver strength, because a shared adapter creates cross-task interference when formats diverge.</p>
+    <p>The competition scored six reasoning categories under greedy decoding on a frozen backbone with a LoRA adapter capped at rank 32. In that setting, the training target must be both correct and locally predictable. Because all categories share one adapter, a trace redesign can improve one task while shifting behavior in another.</p>
   </div>
   <div class="grid three">
     <div class="panel"><span class="plabel">Constraint</span><div class="big">r ≤ 32</div><p>Low-rank delta. Format regularity is what fits in the budget, not solver breadth.</p></div>
@@ -276,10 +277,10 @@
 <!-- 03 VALIDATION -->
 <section id="validation" class="wrap">
   <div class="eyebrow">03 / Local Validation</div>
-  <h2>The method works — locally.</h2>
+  <h2>A format-only intervention recovered 20.3 points locally.</h2>
   <p class="lede">On <code>bit_manipulation</code>, the probe localized a recurring format divergence early in the trace: 44 of 47 failing traces first diverged at the rule-statement line. Rewriting the trace to derive that line — not touching the solver logic — moved local accuracy from 33.3% to 53.6% (+20.3pp). That's the proof the diagnostic points at real, addressable failures.</p>
   <div class="body-copy">
-    <p>The probe flagged that traces diverged at a consistent structural position, not at the reasoning step. Reshaping the target trace to a derivation-first format the low-rank adapter could reproduce recovered the gain. The lever was trace format, confirming the premise: within a rank-32 budget, learnability is a formatting problem before it's a reasoning problem.</p>
+    <p>The failures clustered at the rule declaration, where the operator and operand indices appeared before the trace had derived them. Reordering the trace so those values were computed first improved the category without changing the solver. The result shows that trace structure itself can be the binding constraint.</p>
   </div>
   <div class="grid two">
     <div class="panel"><span class="plabel">Before · v9 traces</span><div class="big">33.3%</div><p>28/84 on the frozen dev split. Greedy divergence at a fixed structural position (rule statement). Solver was fine; format wasn't reproducible.</p></div>
@@ -289,17 +290,20 @@
       <p style="color:#3a6b4c;">45/84 (+20.3pp). Derivation-first trace format, same solver, only the <code>bit_manipulation</code> traces changed — the diagnostic pointed true.</p>
     </div>
   </div>
-  <p style="margin-top:14px;font-family:var(--mono);font-size:.72rem;color:var(--quiet);">Source: canonical dev_frozen evals (n=500, greedy, vLLM 0.20.1), <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/RESULTS.md">RESULTS.md</a> + <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/SESSION_LOG.md">docs/SESSION_LOG.md</a> 2026-06-10/12. v9→v13 is single-variable on bit_manipulation. Honest ledger: <code>text_encryption</code> paid for it, and the drop was not single-variable — 68.7% (v9) → 56.6% (v11: only the bit_manip traces changed; cross-task interference through the shared LoRA) → 53.0% (v12: a deliberate two-variable step that added a char-by-char text_enc redesign) → 54.2% (v13: char-by-char reverted, didn't recover). At most ~3.6pp is isolable to char-by-char; interference from the longer bit_manip traces did most of the damage. Net overall local: +1.0pp. On Kaggle (public LB), with identical packaging, v13 scored 0.56 vs v9's 0.58. §04–05 unpack why the local win didn't transfer.</p>
+  <div class="body-copy">
+    <p><strong>Scope of the gain.</strong> The 33.3% → 53.6% result is a canonical local measurement on <code>dev_frozen</code> with vLLM 0.20.1. The submitted adapter scored 0.56 public-LB versus the 0.58 baseline, so the local improvement did not transfer directly.</p>
+    <p><strong>Shared-adapter tradeoff.</strong> The longer bit-manipulation traces also reduced <code>text_encryption</code> accuracy through cross-task interference. The net overall local gain was about 1 point. Full version-by-version evidence is in <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/RESULTS.md">RESULTS.md</a> and the <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/writeup.md">canonical writeup</a>.</p>
+  </div>
 </section>
 
 <!-- 04 RUNTIME WALL -->
 <section id="wall" class="wrap">
-  <div class="eyebrow">04 / The Runtime Wall · C7</div>
-  <h2>Identical weights, different verdicts.</h2>
-  <p class="lede">Runtime divergence is a dominant contributor to the local↔Kaggle gap — not the sole cause; packaging, stage-2 recipe differences, and other factors also contribute. But it is material: byte-identical weights produced a 25.3pp swing on <code>text_encryption</code> between two local hosts whose isolated delta was the vLLM version.</p>
+  <div class="eyebrow">04 / Runtime Parity</div>
+  <h2>Runtime parity was a material hidden variable.</h2>
+  <p class="lede">Byte-identical weights produced a 25.3-point <code>text_encryption</code> swing across two local inference environments. The result establishes that runtime differences were material, although the exact Spark&nbsp;2 attribution and the runtime share of the Kaggle gap remain inferred.</p>
   <div class="divergence reveal" id="divergence">
     <div class="dtitle">text_encryption · byte-identical LoRA weights (cmp-verified)</div>
-    <div class="dnote">Same adapter. Same prompts. Greedy. Truncation 0.0 on both local runs. vLLM version is the identified delta (C7, inferred).</div>
+    <div class="dnote">Same adapter. Same prompts. Greedy. Truncation 0.0 on both local runs. The 43.4% artifact is attributed to Spark 2 by session evidence; its engine version was not recorded in the artifact.</div>
     <div class="dbar">
       <div class="dlab">Kaggle<small>vLLM 0.17.1 (reported)</small></div>
       <div class="dtrack"></div>
@@ -318,26 +322,27 @@
   </div>
   <div class="body-copy">
     <p>Kaggle's row is honest by omission: the leaderboard exposes only an overall score, never per-task accuracy — so <code>text_encryption</code> under vLLM 0.17.1 (a version user-reported from the competition, not locally verifiable) is unmeasurable. What is measurable: the fully-packaged adapter scores 0.58 on the Kaggle public LB against 0.694 locally, an ≈11pp residual attributed — inferred, not confirmed — to the same runtime-version divergence the two local bars demonstrate directly.</p>
-    <p>This reframes the whole scoreboard. Sub-1pp submission deltas are statistically meaningless against ±0.5pp non-determinism, and a runtime version gap of 25pp swamps any adapter-quality signal you think you're measuring. Version parity is a hidden variable that has to be pinned before any local result can be trusted as a Kaggle predictor.</p>
+    <p>For scale: local greedy evaluation carries a measured ±0.5pp run-to-run noise floor, so a ~25pp swing is more than 50× ordinary non-determinism.</p>
+    <p>The practical conclusion reframes the scoreboard: a runtime gap this size swamps the adapter-quality signal you think you're measuring, so ordinary submission-level deltas cannot be read cleanly until the inference stack is pinned. Local gains should be treated as environment-specific until tested under deployment parity.</p>
   </div>
 </section>
 
 <!-- 05 CONFOUNDS -->
 <section id="confounds" class="wrap">
-  <div class="eyebrow">05 / Confounds Caught</div>
-  <h2>The conclusions that were wrong first.</h2>
-  <p class="lede">Single-variable discipline is the connective thread of this project. It's what let me catch three confounds that each produced a confident, wrong conclusion before the clean ablation reversed it.</p>
+  <div class="eyebrow">05 / Controlled Revisions</div>
+  <h2>Three interpretations failed a cleaner ablation.</h2>
+  <p class="lede">Each case below began with a plausible explanation for a score movement. A later single-variable comparison narrowed or overturned that explanation.</p>
 
   <div class="reversal reveal">
-    <div class="rtag">Reversal · C11</div>
+    <div class="rtag">Corrected interpretation</div>
     <p class="old">The C2 converter fix regressed the score, so the bug was "load-bearing" — the scrambled weights were somehow helping.</p>
-    <p class="new">The regression was a <strong>packaging confound</strong>, not a weight effect. The "load-bearing bug" narrative was itself an artifact of an unclean submission. Named on-page rather than quietly dropped.</p>
+    <p class="new">The regression was a <strong>packaging confound</strong>, not evidence that scrambled weights were beneficial. The reshape fix is mathematically correct; its isolated Kaggle effect remains untested.</p>
   </div>
 
   <div class="reversal reveal">
-    <div class="rtag">Reversal · §6 runtime claim</div>
+    <div class="rtag">Corrected interpretation</div>
     <p class="old">"This was never a runtime divergence problem" — an earlier draft's framing.</p>
-    <p class="new">Runtime divergence (C7) turned out to be the <strong>dominant</strong> gap cause. The earlier claim is reversed explicitly as a methodology beat.</p>
+    <p class="new">The later same-weights comparison showed that runtime divergence was <strong>material</strong>. Its exact contribution to the Kaggle gap remains inferred.</p>
   </div>
 
   <div class="grid three">
@@ -375,10 +380,10 @@
 <!-- 07 TAKEAWAYS -->
 <section id="takeaways" class="wrap">
   <div class="eyebrow">07 / Takeaways</div>
-  <h2>The contribution is the discipline.</h2>
-  <p class="lede">Not the 0.58. The transferable result is a method for diagnosing format-level learnability and the experimental hygiene to keep confounds from masquerading as findings.</p>
+  <h2>A reusable debugging loop emerged.</h2>
+  <p class="lede">The transferable result is a workflow for locating format-level divergence, redesigning traces, and separating adapter changes from packaging and runtime effects.</p>
   <div class="grid two">
-    <div class="panel" style="grid-column:1/-1;"><span class="plabel">Loop, not diagnostic — the #1 takeaway</span><p>Huikang ran the min-logprob probe after every training run, on every trace in the training set, as a pre-submission gate; we ran it post-hoc, on a failing category. His loop produces higher signal per submission — we adopted the technique too late to close the loop, and that is the clearest retrospective regret. If you take one thing from this page, take that.</p></div>
+    <div class="panel" style="grid-column:1/-1;"><span class="plabel">Move the probe earlier</span><p>Huikang used min-logprob probing continuously as a pre-submission gate. This project used it post hoc on one failing category. The higher-leverage workflow is to run the probe after every training iteration, before spending a leaderboard submission.</p></div>
     <div class="panel"><span class="plabel">Method</span><p>Teacher-forced logprob probing localizes format-level greedy divergence in one forward pass — a cheap, reusable diagnostic.</p></div>
     <div class="panel"><span class="plabel">Hygiene</span><p>Single-variable ablations caught C7, C8, and C11. Explicit on-page reversals signal rigor, not weakness.</p></div>
     <div class="panel"><span class="plabel">Hidden variable</span><p>Runtime version parity can dominate apparent adapter quality. Pin it before trusting any local→leaderboard extrapolation.</p></div>
@@ -407,7 +412,7 @@
 
 <footer class="wrap">
   <span>Nemotron Reasoning Retrospective · <a href="https://github.com/kpeterson1/nemotron-reasoning">repo</a> · <a href="https://github.com/kpeterson1/nemotron-reasoning/blob/main/docs/writeup.md">writeup</a></span>
-  <span><a href="#top">Back to top ↑</a> · design system re-themed from SkillOpt</span>
+  <span><a href="#top">Back to top ↑</a></span>
 </footer>
 
 <script>
