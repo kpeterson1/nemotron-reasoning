@@ -8,15 +8,17 @@ Public LB: 0.58 · Private LB (final): 0.604 · Rank: 3488/4182
 
 ## 1. Executive Summary
 
-**The problem.** The challenge asked competitors to fine-tune a LoRA adapter (rank ≤ 32) on Nemotron-3-Nano-30B-A3B-BF16 and evaluate under greedy decoding (temperature=0.0) across six reasoning categories. Like most entries, ours followed the dominant paradigm: deterministic Python solvers generate verified chain-of-thought traces, and the model is SFT-trained to reproduce them. The central lesson of the project is that correct traces are necessary but not sufficient. Performance is constrained by three distinct ceilings — **solver coverage** (can a correct trace be produced?), **trace learnability** (can the model reproduce it token by token under greedy decoding?), and **runtime validity** (does the inference environment preserve the locally observed behavior?) — and progress against one ceiling says nothing about the others.
+The project exposed three separate limits on deterministic reasoning SFT:
 
-**The diagnostic method.** Teacher-forced first-divergence probing — a technique we adopted from tonghuikang's public work — runs one forward pass over a gold trace and finds the first token position where the model's greedy prediction diverges from it. Aggregating first-divergence positions across failing examples distinguishes format-level failures (clustered, cheap to fix) from capacity failures (scattered).
+1. **Solver coverage:** can the data pipeline produce a correct, verified trace?
+2. **Trace learnability:** can the model reproduce that trace token by token under greedy decoding?
+3. **Runtime validity:** does the inference environment preserve the locally measured behavior?
 
-**The strongest local result.** On `bit_manipulation`, our solver covered 88.1% of the dev split but the trained model reproduced only 33.3% of gold answers. Probing showed 44 of 47 examined failures first diverged in the same rule-statement region. Redesigning the trace from declaration-first to derivation-first — no solver change — moved local accuracy from **33.3% to 53.6%** (+20.3pp) on the submitted mix. A complete diagnosis → intervention → measurement loop.
+The strongest experiment isolated the second limit. On `bit_manipulation`, solver coverage was 88.1% while baseline model accuracy was 33.3%. Teacher-forced first-divergence probing — adapted from tonghuikang's public work — showed that 44 of 47 examined failures first broke at the same rule-statement region. Rewriting the trace so that the rule was derived before it was declared raised local accuracy to **53.6%** (+20.3pp) without changing the solver.
 
-**The runtime limitation.** The gain did not translate to Kaggle: the redesigned adapter scored 0.56 public-LB against the 0.58 baseline. The investigation that followed found that byte-identical weights under two different local vLLM versions produced a ~25pp accuracy swing on `text_encryption` (with an attribution caveat detailed in §6). vLLM version divergence is *a* dominant contributor to the local-vs-Kaggle gap — not the sole cause — and it is not something we could engineer around: Kaggle's reported engine version cannot run on our hardware.
+That gain did not transfer to Kaggle: the redesigned adapter scored 0.56 public-LB against the 0.58 baseline. A later same-weights comparison found a roughly 25-point `text_encryption` accuracy swing across two local vLLM environments. The comparison establishes that runtime differences were material; the exact contribution of runtime to the Kaggle gap remains inferred rather than directly measured.
 
-**The result.** Public LB 0.58 · private LB 0.604 · rank 3488/4182 — outside the top 10%, not eligible for the Open Contribution Awards. The competition score reflects where the project ended, not what the investigation was worth. This writeup is for the Nemotron community (particularly around vLLM version sensitivity, which we believe is under-discussed) and for anyone running SFT on reasoning traces under deterministic decoding.
+**Final result:** public LB 0.58 · private LB 0.604 · rank 3488/4182. The value of the project is the diagnostic loop and the corrected evidence trail: how to separate solver, trace-format, packaging, and runtime failures before treating a score movement as a model improvement.
 
 ---
 
@@ -38,11 +40,11 @@ flowchart LR
   H --> I[Kaggle submission]
 ```
 
-**Canonical local evaluation environment.** Spark 1 (NVIDIA DGX Spark, GB10), vLLM **0.20.1**, `dev_frozen` split (n=500, seed-42 stratified from Kaggle's `train.csv`), greedy decoding. Every local number in this writeup comes from this frame unless explicitly labeled otherwise. This discipline matters: §6 documents how an off-frame number manufactured a false finding.
+**Canonical local evaluation environment.** Spark 1 (NVIDIA DGX Spark, GB10), vLLM **0.20.1**, `dev_frozen` split (n=500, seed-42 stratified from Kaggle's `train.csv`), greedy decoding. Every local result uses this frame unless a different environment is named. Section 6 shows why that consistency matters.
 
 **Score conventions.** Every per-submission Kaggle score quoted here (the 0.55–0.58 band) is a **public-LB** value unless labeled otherwise. The final private-LB result was 0.604 — the private split held slightly above the public one. The two are different metrics over different held-out splits, and a public-LB delta does not necessarily predict private standing. Local greedy evaluation carries a measured ±0.5pp run-to-run noise floor; we treat sub-1pp deltas as meaningless (the measurement behind that floor is documented in Appendix E).
 
-**Version names used below.**
+**Experiment names used below.** The prose uses plain-language descriptions first; these labels are included for repository traceability.
 
 | Name | What it is |
 |---|---|
@@ -64,6 +66,19 @@ flowchart LR
 
 Solver coverage measures whether the trace exists. Learnability measures whether the model can produce it. Runtime validity determines whether either measurement survives deployment.
 
+```mermaid
+flowchart TD
+  A[Correct solver] --> B[Verified trace]
+  B --> C{Learnable under greedy decoding?}
+  C -- no --> D[First-divergence probe]
+  D --> E[Trace redesign]
+  E --> C
+  C -- yes --> F[Local improvement]
+  F --> G{Runtime parity?}
+  G -- no --> H[Result remains environment-specific]
+  G -- yes --> I[Deployment-valid improvement]
+```
+
 The per-category evidence, from the canonical local eval of the v9 baseline (Kaggle provides no per-category output, so no leaderboard equivalent exists):
 
 | Category | Solver coverage | v9 model accuracy (local) | Gap |
@@ -75,7 +90,7 @@ The per-category evidence, from the canonical local eval of the v9 baseline (Kag
 | bit_manipulation | 88.1% (74/84) | 33.3% | ~55pp |
 | eq_transformation | 28.6% (24/84) | 15.5% | ~13pp |
 
-Three categories are fully solved. `eq_transformation` is solver-bounded — coverage, not learnability, is the ceiling there. `bit_manipulation` shows a 55pp gap between what the data contains and what the model learns: a learnability problem, and the subject of §5. An earlier draft of this table showed `text_encryption` at 43.4% (a ~57pp gap) — that number came from an artifact eval run that the runtime investigation (§6) later explained; the canonical accuracy for the same weights is 68.7%, and only `bit_manipulation`'s gap survives as a learnability finding (§8 covers the text_encryption phantom).
+Three categories are fully solved. `eq_transformation` is solver-bounded — coverage, not learnability, is the ceiling there. `bit_manipulation` shows a 55pp gap between what the data contains and what the model learns: a learnability problem, and the subject of §5. A separate artifact run showed `text_encryption` at 43.4%, but the runtime investigation in §6 showed that it was not comparable to the canonical frame. The supported baseline is 68.7%; only the `bit_manipulation` gap survives as a trace-learnability finding.
 
 ---
 
@@ -96,7 +111,7 @@ The technique is not novel — we adopted it from tonghuikang's public work — 
 - **Our usage:** post-hoc diagnostic. Run the probe on a failing category, identify the region where the model can't predict, redesign the trace format, retrain.
 - **Huikang's usage:** continuous pre-submission gate. Run the probe after every training run, on every trace in the training set, and only submit when the worst traces cleared the threshold.
 
-His workflow closed the loop *inside* training. Ours opened the loop long enough to diagnose a specific failure, then closed it manually with a format change. Both are valid; his produces higher signal per submission. We adopted the technique too late in the competition to convert it into the tight loop, and that gap is our clearest retrospective regret.
+Huikang used the signal continuously as a pre-submission gate. We used it post hoc to diagnose one failing category, redesign the trace, and retrain. The reusable lesson is to move this probe earlier: run it after each training iteration, before spending a leaderboard submission.
 
 ---
 
@@ -140,11 +155,13 @@ Every token in the final rule statement is preceded by the computation that prod
 
 **v9 versus v13 on Kaggle.** The v13 adapter — v9 with only bit_manipulation swapped to the shortened v5 traces, everything else byte-identical, packaged identically to Adapter A — scored **0.56** on the public LB. The v9 baseline scored **0.58**. A +20pp local category gain arrived as a leaderboard regression.
 
-At the time, this read as proof that the local-vs-Kaggle gap could not be a runtime problem — local and Kaggle eval were pointing in opposite directions on the same intervention, and a preliminary draft of this writeup said so explicitly. That conclusion was wrong, and this section documents the reversal.
+The leaderboard regression forced a broader parity check. The resulting evidence changed the interpretation: the local improvement was valid on its measured environment, but it was not a reliable predictor of behavior under a different inference stack.
+
+**Principle: a local gain is only portable when the inference stack is comparable.**
 
 **The same-weights comparison.** A parity check on `text_encryption` found that our canonical Spark 1 eval showed v9 at 68.7%, while a second run of the same v9 adapter showed 43.4%. Same weights (byte-identical, `cmp`-verified), same prompts, 0% truncation in both runs, same greedy settings. Twenty-six problems flipped between the two runs, with raw outputs starting identical and diverging mid-generation.
 
-The 43.4% run's artifact does not record its engine version; we attribute it to Spark 2 (vLLM 0.22.1) **by inference** — our corrections log marks this attribution explicitly as inferred, not artifact-confirmed. Under that attribution, the two machines differ in one variable that mattered: vLLM version.
+The 43.4% artifact does not record its engine version. Based on the machine and session trail, we attribute it to Spark 2 (vLLM 0.22.1), but that attribution is inferred rather than artifact-confirmed.
 
 | Environment | vLLM version | text_encryption accuracy on v9 |
 |---|---|---|
@@ -152,11 +169,11 @@ The 43.4% run's artifact does not record its engine version; we attribute it to 
 | Spark 2 | 0.22.1 (attribution of the 43.4% run inferred — artifact records no version) | 43.4% |
 | Kaggle | 0.17.1 (user-reported from a competitor notebook; not independently verifiable) | unknown (no per-category output) |
 
-The ~25pp swing is a **local-vs-local** finding, on two machines we controlled, with identical weights — more than 50× the ±0.5pp noise floor we had measured for greedy decoding on 0.20.1 (Appendix E). Long traces (text_encryption's typical output shape) appear to amplify kernel-level greedy divergence into large accuracy swings. Kaggle's reported 0.17.1 is a third point further out.
+The ~25pp swing is a **local-vs-local** finding, on two machines we controlled, with identical weights — more than 50× the ±0.5pp noise floor we had measured for greedy decoding on 0.20.1 (Appendix E). Long traces (text_encryption's typical output shape) appear to amplify kernel-level greedy divergence into large accuracy swings. Kaggle's reported 0.17.1 is a third, unreproduced environment.
 
 **The implication for the bit_manipulation result.** Our +20.3pp local gain was measured on Spark 1 (vLLM 0.20.1). Kaggle reportedly runs vLLM 0.17.1. **We have no way to know what the same weights would have scored under Kaggle's runtime**, and the Nemotron–DGX-Spark hardware combination cannot run vLLM 0.17.1 (CUDA driver requirements). The runtime is a structural constraint of the competition, not something we could have engineered around locally.
 
-**Precision about the claim.** vLLM version divergence is *a* dominant contributor to the local-vs-Kaggle gap, not the sole cause. Packaging (§7, §8), stage-2 recipe differences, and other factors also contribute. Even fully applied, the best submission's public-LB 0.58 against the local overall 0.694 leaves an ≈11pp residual that we attribute — inferred, not confirmed — to the same runtime-version divergence the two local rows demonstrate directly. What the ~25pp same-weights swing establishes is that the runtime is *material*: any local optimization landing in the same numerical range should be treated as unverified on Kaggle until submitted.
+**Precision about the claim.** vLLM version divergence is *a* dominant contributor to the local-vs-Kaggle gap, not the sole cause. Packaging (§7, §8), stage-2 recipe differences, and other factors also contribute. Even fully applied, the best submission's public-LB 0.58 against the local overall 0.694 leaves an ≈11pp residual that we attribute — inferred, not confirmed — to the same runtime-version divergence the two local rows demonstrate directly. What the same-weights swing establishes is simple: runtime was material enough to overwhelm ordinary adapter-level deltas. A local optimization should therefore be treated as environment-specific until tested under deployment parity.
 
 ---
 
@@ -165,7 +182,7 @@ The ~25pp swing is a **local-vs-local** finding, on two machines we controlled, 
 - **Trace learnability is a distinct ceiling.** A category can have 88.1% solver coverage and 33.3% model accuracy. Solver coverage measures whether the data exists; learnability measures whether the model can reproduce it (§3, §5).
 - **First-divergence probing locates format-level failures.** 44 of 47 examined failures diverged at one structural region — precise enough to design a targeted intervention (§4, §5).
 - **Derivation-first traces improved local bit_manipulation accuracy.** 33.3% → 53.6% with no solver change, on the canonical local environment only (§5).
-- **Runtime version materially affects generated results.** ~25pp same-weights swing across two local vLLM versions, subject to the Spark 2 attribution caveat (§6).
+- **Runtime version materially affects generated results.** ~25pp same-weights swing across two local vLLM versions, subject to the Spark 2 attribution caveat (§6). Read the other way, this finding validates the competition's choice of a standardized G4/RTX PRO 6000 evaluation infrastructure — Google Cloud G4 VMs with NVIDIA RTX PRO 6000 Blackwell GPUs, per NVIDIA's retrospective ["Lessons From the Leaderboard"](https://developer.nvidia.com/blog/lessons-from-the-leaderboard-what-5000-kagglers-taught-us-about-improving-ai-reasoning): when byte-identical weights can swing this much across inference stacks, a single fixed runtime is what keeps leaderboard scores comparable across entrants at all.
 - **List-format `target_modules` was the reproducible Kaggle packaging lever.** On byte-identical weights, converting `target_modules` from a regex string to an explicit list produced a clean ~2pp public-LB gain (0.55 → 0.57). The proposed mechanism — vLLM 0.17.1 silently under-applying a regex `target_modules` — is inferred, not confirmed on 0.17.1 locally. Both this lever and the finding below are specific to vLLM 0.17.1 and may or may not matter on newer versions; and like every packaging A/B in this writeup, the deltas are public-LB values that do not necessarily predict private standing.
 - **Backbone-prefix renaming was not a reproducible lever.** The difference between `model.model.` and `backbone.` key prefixes is ≤1pp and sign-inconsistent across A/Bs — noise at our submission-level floor.
 
@@ -173,7 +190,7 @@ The ~25pp swing is a **local-vs-local** finding, on two machines we controlled, 
 
 ## 8. Confounds and Corrected Interpretations
 
-Three of our headline conclusions were confounded. The single-variable discipline that produced each finding was also the discipline that overturned it — you do not get to keep the findings when the discipline that produced them also overturns them.
+Three prominent interpretations failed a later single-variable check. The useful outcome is not the reversal itself, but the narrower conclusion that survived it.
 
 | Initial interpretation | Confound discovered | Supported conclusion |
 |---|---|---|
@@ -183,7 +200,7 @@ Three of our headline conclusions were confounded. The single-variable disciplin
 
 Two details from these episodes are worth keeping in view. First, the char-by-char cipher-decode trace design in the second row follows tonghuikang's design — his reference reasoner emits a per-character `cipher→plain` lookup step immediately before each decoded word. The design was sound; the problem it was aimed at did not exist on the canonical frame. Second, the forensic observations that motivated that redesign (misses landing exactly one plausible English word off; the model's own cipher map never matching its emitted output) were real observations — of the *artifact eval run's* failure mode, not of a live learnability wall. The full forensic record, with its evidentiary caveats, is preserved in Appendix A.
 
-The pattern across all three rows is symmetric: **the discipline that catches confounds is the discipline that catches you drawing false conclusions from confounded data.**
+Across all three cases, the same rule held: score movement was not evidence of mechanism until the changed variables were isolated.
 
 ---
 
@@ -198,6 +215,7 @@ For anyone running SFT on solver-generated traces under deterministic decoding:
 - **Store raw generations, not only aggregate scores.** The mid-generation divergence pattern (identical prefixes, then a flip) was only visible because raw outputs were kept (§6).
 - **Change one experimental variable at a time — and audit past experiments against the same standard.** All three confounds in §8 were two-variable experiments wearing single-variable conclusions.
 - **Treat local gains as environment-specific until tested under deployment parity.** A +20pp local gain arrived on the leaderboard as a regression (§6). Pin the runtime version before trusting any local→production extrapolation; if you cannot run the production runtime locally, treat the gap as unmeasurable rather than assuming it away.
+- **Consider separating reusable knowledge from new problem-solving.** Our traces re-derive everything per problem; distilling the stable, reusable parts (operator semantics, cipher mechanics, transformation rules) into the adapter separately from problem-specific derivation is a lever this project did not explore, and we cannot say whether it would have moved the learnability ceiling.
 
 ---
 
@@ -205,7 +223,7 @@ For anyone running SFT on solver-generated traces under deterministic decoding:
 
 **Repository:** `github.com/kpeterson1/nemotron-reasoning` (public with this writeup)
 
-**Repository state:** This public repository is published as a single snapshot of the final tree — the code, traces, and diagnostics behind the 0.58 public-LB / 0.604 private-LB result. The full investigation history (per-version ablations, the reversal trail, and single-variable branches described in this writeup) is retained privately; the reasoning and outcomes are documented in §6–§8 and in `docs/investigations/`.
+**Repository state:** The public repository is a snapshot of the final tree containing the code, traces, and diagnostics behind the 0.58 public-LB / 0.604 private-LB result. Some branch-level investigation history remains private; the supported conclusions and reproducible artifacts are documented in §6–§8 and `docs/investigations/`.
 
 **Key scripts:**
 - `src/training/convert_peft_to_vllm_moe.py` — MoE adapter conversion pipeline. The shipped version applies the correct `(out, E, r)` expert-tensor reshape; the earlier transposed-reshape bug and its correction are described in §8 and Appendix B.
@@ -234,7 +252,7 @@ For anyone running SFT on solver-generated traces under deterministic decoding:
 
 ## Appendix A: text_encryption forensic record
 
-The forensic detail behind the phantom diagnosis of §8 — gathered before the runtime investigation explained it — is preserved here because the observations were real even though the conclusion drawn from them was not. (These counts come from an uncommitted, contemporaneous CPU analysis; no committed artifact backs them, though the arithmetic reconciles with the run: 43.4% = 36/83 correct, leaving 47 misses.)
+The forensic detail behind the discarded diagnosis of §8 — gathered before the runtime investigation explained it — is preserved here because the observations were real even though the conclusion drawn from them was not. (These counts come from an uncommitted, contemporaneous CPU analysis; no committed artifact backs them, though the arithmetic reconciles with the run: 43.4% = 36/83 correct, leaving 47 misses.)
 
 Decomposing the 47 misses of the artifact eval run: 26 of 47 differed from the gold answer by exactly one plausible English word (`treasure` decrypted as `studies`, `dreams` as `reads`, `curious` as `crystal` — cryptographically wrong, defensible as English continuations). For 0 of 47 misses did the emitted plaintext equal the result of mechanically applying the model's own cipher map; on correct predictions, the mechanical-map match held 81% of the time (29/36). Solver coverage for the category was 100% (83/83), with traces of at most 536 tokens (min 384 / median 470; re-audited 2026-07-09 via `scripts/audit_solver_coverage.py --tasks text_encryption`, CPU-only) — so the gap could not be blamed on data.
 
