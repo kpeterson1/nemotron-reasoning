@@ -496,9 +496,13 @@ DEMO_TOKENS.forEach((t, i) => {
   el.addEventListener('click', () => showRouterToken(i));
   tokRow.appendChild(el);
 });
-document.getElementById('router-prompt').innerHTML =
-  `Prompt <code>"${RD.prompt}"</code> — its real tokenization below. Click a token to see which experts its
+/* RD.prompt is free text from the capture — insert via textContent so a
+   future --prompt containing HTML-significant characters can't inject markup. */
+const routerPrompt = document.getElementById('router-prompt');
+routerPrompt.innerHTML =
+  `Prompt <code></code> — its real tokenization below. Click a token to see which experts its
   hidden state actually routed to:`;
+routerPrompt.querySelector('code').textContent = `"${RD.prompt}"`;
 
 /* ================================================================
    5. DETAIL PANEL + TOOLTIP
