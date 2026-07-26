@@ -34,6 +34,16 @@
   }
   #stage { flex: 1; position: relative; }
   #canvas-wrap, #canvas-wrap canvas { position: absolute; inset: 0; }
+  /* Phone-width: stack canvas above a full-width scrollable sidebar; the
+     ResizeObserver on #stage picks up the new canvas size automatically. */
+  @media (max-width: 768px) {
+    body { flex-direction: column; }
+    #stage { order: -1; flex: none; height: 55vh; }
+    #sidebar {
+      width: 100%; min-width: 0; height: auto; flex: 1; min-height: 0;
+      border-right: none; border-top: 1px solid var(--border);
+    }
+  }
 
   h1 { font-size: 17px; font-weight: 650; letter-spacing: .2px; }
   .sub { color: var(--ink-2); font-size: 12px; margin: 4px 0 14px; line-height: 1.5; }
