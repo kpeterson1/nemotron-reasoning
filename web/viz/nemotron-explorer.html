@@ -386,6 +386,19 @@ for (const l of LAYERS) {
   if (l.kind === 'attn') m.rotation.y = Math.PI / 8;
   m.userData = l;
   layerGroup.add(m); meshes.push(m);
+  if (l.kind === 'attn') {
+    /* Invisible oversized hit target: the visible attention disc is only a few
+       px tall on phones. material.visible=false skips rendering but Mesh.raycast
+       never checks it, so the proxy still picks. userData.kind='attn' means
+       applyVisibility dims this material with the real disc, so pickable()
+       drops the proxy when attention is legend-toggled off (no phantom picks);
+       userData.proxyFor lets pickAt() report the real mesh. */
+    const proxy = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 1.0, 8),
+      new THREE.MeshBasicMaterial({ visible: false }));
+    proxy.position.y = m.position.y; proxy.rotation.y = m.rotation.y;
+    proxy.userData = { ...l, proxyFor: m };
+    layerGroup.add(proxy); meshes.push(proxy);
+  }
 }
 /* MoE slabs get a faint expert-grid line overlay */
 for (const m of meshes) if (m.userData.kind === 'moe') {
@@ -576,12 +589,16 @@ function pickable(m) {
   for (let o = m; o; o = o.parent) if (!o.visible) return false;
   return true;
 }
-renderer.domElement.addEventListener('pointermove', ev => {
+function pickAt(clientX, clientY) {
   const r = renderer.domElement.getBoundingClientRect();
-  mouse.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  mouse.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(mouse, camera);
   const hit = ray.intersectObjects(meshes.filter(pickable), false)[0];
-  hovered = hit ? hit.object : null;
+  return hit ? (hit.object.userData.proxyFor || hit.object) : null;
+}
+renderer.domElement.addEventListener('pointermove', ev => {
+  const r = renderer.domElement.getBoundingClientRect();
+  hovered = pickAt(ev.clientX, ev.clientY);
   if (hovered) {
     const u = hovered.userData;
     const name = u.kind === 'io' ? u.label
@@ -601,11 +618,19 @@ renderer.domElement.addEventListener('pointermove', ev => {
   } else { tooltip.style.display = 'none'; document.body.style.cursor = ''; }
 });
 renderer.domElement.addEventListener('pointerleave', () => { tooltip.style.display = 'none'; });
-renderer.domElement.addEventListener('click', () => {
-  if (!hovered) return;
-  const u = hovered.userData;
+/* Tap/click picks raycast at the event's own coordinates: on touch there is no
+   hover, so `hovered` is null (or stale) at tap time. The pointerdown→click
+   movement guard (~6px) keeps camera drags — mouse or touch, both delivered as
+   pointer events — from ending in an accidental pick. */
+let downX = -1, downY = -1;
+renderer.domElement.addEventListener('pointerdown', ev => { downX = ev.clientX; downY = ev.clientY; });
+renderer.domElement.addEventListener('click', ev => {
+  if (Math.hypot(ev.clientX - downX, ev.clientY - downY) > 6) return;
+  const picked = pickAt(ev.clientX, ev.clientY);
+  if (!picked) return;
+  const u = picked.userData;
   showDetail(u.kind, u.i);
-  if (u.kind === 'moe') { openExpertGrid(hovered); routerPanelOn(); }
+  if (u.kind === 'moe') { openExpertGrid(picked); routerPanelOn(); }
 });
 
 /* ================================================================
