@@ -631,6 +631,10 @@ renderer.domElement.addEventListener('click', ev => {
   const u = picked.userData;
   showDetail(u.kind, u.i);
   if (u.kind === 'moe') { openExpertGrid(picked); routerPanelOn(); }
+  /* Selecting a non-MoE layer retires the expert grid — otherwise it lingers on
+     the previous MoE layer and reads as a failed selection. Expert/shared are
+     exempt: they live inside the grid, and clicking them is a drill-in. */
+  else if (u.kind !== 'expert' && u.kind !== 'shared') closeExpertGrid();
 });
 
 /* ================================================================
