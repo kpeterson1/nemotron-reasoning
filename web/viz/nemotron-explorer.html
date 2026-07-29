@@ -596,6 +596,30 @@ function pickAt(clientX, clientY) {
   const hit = ray.intersectObjects(meshes.filter(pickable), false)[0];
   return hit ? (hit.object.userData.proxyFor || hit.object) : null;
 }
+/* Tap-only near-miss fallback: an expert cube is ~10 CSS px on a phone, so a
+   discrete tap usually lands in the gutter even when hover — which samples a
+   moving stream of pointer positions — found the cube. If the precise ray
+   misses and the grid is open, pick the nearest cube/shared-bar center within
+   15 px. Nearest-wins resolves neighbours (centers ~13 px apart); 15 px covers
+   the ~9 px worst-case interior gap (13/√2) with no dead zones while staying
+   close to half-spacing. Candidates are expertGroup children only — layers are
+   big targets that already work, and slop there could grab a wrong layer. */
+const _proj = new THREE.Vector3();
+function pickAtTap(clientX, clientY) {
+  const direct = pickAt(clientX, clientY);
+  if (direct || !expertGroup.visible) return direct;
+  const r = renderer.domElement.getBoundingClientRect();
+  let best = null, bestD = 15;
+  for (const m of expertGroup.children) {
+    if (!pickable(m)) continue;
+    _proj.setFromMatrixPosition(m.matrixWorld).project(camera);
+    if (_proj.z > 1) continue;
+    const d = Math.hypot(clientX - (r.left + (_proj.x + 1) / 2 * r.width),
+                         clientY - (r.top + (1 - _proj.y) / 2 * r.height));
+    if (d < bestD) { bestD = d; best = m; }
+  }
+  return best;
+}
 renderer.domElement.addEventListener('pointermove', ev => {
   const r = renderer.domElement.getBoundingClientRect();
   hovered = pickAt(ev.clientX, ev.clientY);
@@ -626,7 +650,7 @@ let downX = -1, downY = -1;
 renderer.domElement.addEventListener('pointerdown', ev => { downX = ev.clientX; downY = ev.clientY; });
 renderer.domElement.addEventListener('click', ev => {
   if (Math.hypot(ev.clientX - downX, ev.clientY - downY) > 6) return;
-  const picked = pickAt(ev.clientX, ev.clientY);
+  const picked = pickAtTap(ev.clientX, ev.clientY);
   if (!picked) return;
   const u = picked.userData;
   showDetail(u.kind, u.i);
