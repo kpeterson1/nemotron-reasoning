@@ -1,8 +1,10 @@
 # Nemotron Reasoning Challenge — Diagnosing Reasoning-SFT Bottlenecks
 
-A case study in finding out *why* a fine-tuned reasoning model fails — entered in the NVIDIA Nemotron Model Reasoning Challenge (Kaggle, closed June 15, 2026). Final result: public LB **0.58** · private LB **0.604** · rank **3488/4182**. This is not a winning solution; it is a documented investigation of the bottlenecks that determine whether reasoning SFT works, with the strongest experiment being a complete diagnosis → intervention → measurement loop on one failing category.
+A case study in finding out *why* a fine-tuned reasoning model fails — entered in the [NVIDIA Nemotron Model Reasoning Challenge](https://www.kaggle.com/competitions/nvidia-nemotron-model-reasoning-challenge) (Kaggle, closed June 15, 2026). Final result: public LB **0.58** · private LB **0.604** · rank **3488/4182**. This is not a winning solution; it is a documented investigation of the bottlenecks that determine whether reasoning SFT works, with the strongest experiment being a complete diagnosis → intervention → measurement loop on one failing category.
 
 **The canonical detailed account is [`docs/writeup.md`](docs/writeup.md).** This README is the short version.
+
+A web explainer of this work is live at [nemotron-reasoning.pages.dev](https://nemotron-reasoning.pages.dev/), including an interactive [3D architecture explorer](https://nemotron-reasoning.pages.dev/viz/nemotron-explorer) of the Nemotron-3-Nano MoE/Mamba stack — both built from this repository's [`web/`](web/) directory.
 
 ## What this project investigated
 
