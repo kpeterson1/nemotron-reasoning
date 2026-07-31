@@ -152,6 +152,45 @@
     padding: 7px 14px; font-size: 13px; display: none;
   }
   #pass-label b { font-variant-numeric: tabular-nums; }
+
+  /* intro panel — "Start here" overlay for first-time viewers */
+  #intro-panel {
+    position: absolute; top: 14px; left: 14px; z-index: 8;
+    width: min(360px, calc(100% - 28px)); max-height: calc(100% - 28px);
+    display: flex; flex-direction: column;
+    background: rgba(20,20,23,.96); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0,0,0,.5);
+  }
+  #intro-head { display: flex; align-items: center; gap: 8px; padding: 12px 13px 8px; flex: none; }
+  #intro-head h2 { flex: 1; font-size: 14.5px; font-weight: 650; color: var(--ink); }
+  #intro-close {
+    background: none; border: none; color: var(--ink-2); cursor: pointer;
+    font-size: 20px; line-height: 1; padding: 4px 8px; margin: -4px -6px 0 0; font-family: inherit;
+  }
+  #intro-close:hover { color: var(--ink); }
+  #intro-body {
+    padding: 0 13px 13px; overflow-y: auto; scrollbar-width: thin;
+    font-size: 12.5px; line-height: 1.55; color: var(--ink-2);
+  }
+  #intro-body b { color: var(--ink); }
+  #intro-body p, #intro-body ul { margin-bottom: 8px; }
+  #intro-body ul { padding-left: 17px; }
+  #intro-body li { margin-bottom: 6px; }
+  #intro-body .btn { margin: 2px 0 0; }
+  #intro-tab {
+    position: absolute; top: 14px; left: 14px; z-index: 8;
+    background: var(--panel-2); color: var(--ink); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 13px; font-size: 12px; font-weight: 600;
+    font-family: inherit; cursor: pointer; transition: background .12s;
+  }
+  #intro-tab:hover { background: #2e2e34; }
+  #intro-close:focus-visible, #intro-tab:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; }
+  #intro-panel[hidden], #intro-tab[hidden] { display: none; }
+  @media (max-width: 768px) {
+    /* full-width card over the top of the 55vh canvas; body scrolls internally,
+       the head row (with the ×) stays pinned, a sliver of canvas stays visible */
+    #intro-panel { left: 10px; right: 10px; top: 10px; width: auto; max-height: 80%; }
+  }
 </style>
 </head>
 <body>
@@ -214,7 +253,59 @@
   <div id="tooltip"></div>
   <div id="pass-label"></div>
   <div id="hud">token flow: bottom → top<br><span id="hud-cam">auto-rotating — drag to take over</span></div>
+
+  <div id="intro-panel" role="dialog" aria-labelledby="intro-title">
+    <div id="intro-head">
+      <h2 id="intro-title">What am I looking at?</h2>
+      <button id="intro-close" aria-label="Hide intro">×</button>
+    </div>
+    <div id="intro-body">
+      <p>This is a 3D map of an AI language model — NVIDIA's <b>Nemotron-3-Nano</b> —
+      showing how it turns a sentence into a prediction. The tall stack is <b>52
+      processing layers</b>. A word enters at the bottom and is transformed layer by
+      layer on its way to the top.</p>
+      <p>Two things make this model clever:</p>
+      <ul>
+        <li><b>It's efficient.</b> The model has 31.6 billion internal parameters,
+        but it only uses about 3.6 billion for any single word — roughly 9× less
+        work than using all of them. It does this by waking up only 6 of its 128
+        "expert" sub-networks per word.</li>
+        <li><b>It understands context.</b> Press <b>Router demo</b>, then tap the
+        token <b>2</b> — it appears twice in the example sentence ("The derivative
+        of x^2 is 2x."). The model sends it to <b>different</b> experts each time,
+        because the surrounding words are different. It's reacting to context, not
+        looking up a fixed answer.</li>
+      </ul>
+      <p><b>Try this:</b> press <b>Forward pass</b> to watch a word travel up through
+      the layers, then press <b>Router demo</b> to see which experts each word wakes
+      up. Hover or tap any block to learn what it does.</p>
+      <button class="btn" id="intro-gotit">Got it — hide this</button>
+    </div>
+  </div>
+  <button id="intro-tab" hidden>?&ensp;Start here</button>
 </div>
+
+<script>
+/* ---- intro panel ----
+   Plain (non-module) script so the intro works even if the three.js CDN import
+   fails. Dismissed state is a page variable ON PURPOSE — this is a static
+   deploy, and every new visitor should see the intro; do not persist it. */
+(() => {
+  let introDismissed = false;
+  const panel  = document.getElementById('intro-panel');
+  const tab    = document.getElementById('intro-tab');
+  const close  = document.getElementById('intro-close');
+  function setDismissed(d, moveFocus) {
+    introDismissed = d;
+    panel.hidden = d; tab.hidden = !d;
+    if (moveFocus) (d ? tab : close).focus();
+  }
+  close.addEventListener('click', () => setDismissed(true, true));
+  document.getElementById('intro-gotit').addEventListener('click', () => setDismissed(true, true));
+  tab.addEventListener('click', () => setDismissed(false, true));
+  panel.addEventListener('keydown', ev => { if (ev.key === 'Escape') setDismissed(true, true); });
+})();
+</script>
 
 <script type="importmap">
 { "imports": {
