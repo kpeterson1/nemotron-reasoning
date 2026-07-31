@@ -303,7 +303,9 @@
   close.addEventListener('click', () => setDismissed(true, true));
   document.getElementById('intro-gotit').addEventListener('click', () => setDismissed(true, true));
   tab.addEventListener('click', () => setDismissed(false, true));
-  panel.addEventListener('keydown', ev => { if (ev.key === 'Escape') setDismissed(true, true); });
+  /* Escape listens on document, not the panel: focus is deliberately not moved
+     into the panel on load, so a panel-scoped listener would never fire there. */
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !panel.hidden) setDismissed(true, true); });
 })();
 </script>
 
