@@ -1,10 +1,21 @@
 # Nemotron Reasoning Challenge — Diagnosing Reasoning-SFT Bottlenecks
 
-A case study in finding out *why* a fine-tuned reasoning model fails — entered in the [NVIDIA Nemotron Model Reasoning Challenge](https://www.kaggle.com/competitions/nvidia-nemotron-model-reasoning-challenge) (Kaggle, closed June 15, 2026). Final result: public LB **0.58** · private LB **0.604** · rank **3488/4182**. This is not a winning solution; it is a documented investigation of the bottlenecks that determine whether reasoning SFT works, with the strongest experiment being a complete diagnosis → intervention → measurement loop on one failing category.
+A case study in finding out *why* a fine-tuned reasoning model fails. The central finding: **correct training data and learnable training data are different ceilings.** On one category, our solver produced correct reasoning traces for 88.1% of problems while the trained model reproduced only 33.3% of gold answers; a teacher-forced probe traced 44 of 47 examined failures to a single line of the trace, and redesigning that line — no solver change, no new data — lifted local accuracy to 53.6%. Entered in the [NVIDIA Nemotron Model Reasoning Challenge](https://www.kaggle.com/competitions/nvidia-nemotron-model-reasoning-challenge) (Kaggle, closed June 15, 2026); final result: public LB **0.58** · private LB **0.604** · rank **3488/4182**.
+
+> **What this is:** a case study in debugging deterministic reasoning SFT; a record of controlled trace, packaging, and runtime experiments; reusable tooling for locating token-level failure points in a trace. It is a documented investigation of the bottlenecks that determine whether reasoning SFT works, with the strongest experiment being a complete diagnosis → intervention → measurement loop on one failing category.
+>
+> **What this is not:** a winning competition recipe; evidence that local gains automatically transfer to Kaggle; a claim that one trace format solves every reasoning category.
 
 **The canonical detailed account is [`docs/writeup.md`](docs/writeup.md).** This README is the short version.
 
 A web explainer of this work is live at [nemotron-reasoning.pages.dev](https://nemotron-reasoning.pages.dev/), including an interactive [3D architecture explorer](https://nemotron-reasoning.pages.dev/viz/nemotron-explorer) of the Nemotron-3-Nano MoE/Mamba stack — both built from this repository's [`web/`](web/) directory.
+
+## Choose your path
+
+- **Read in 5 minutes** — this README: [the three ceilings](#the-three-ceilings) and [the case study](#case-study-bit-manipulation).
+- **Full evidence trail** — [`docs/writeup.md`](docs/writeup.md): method, case study, runtime investigation, confounds and corrections.
+- **Reproduce** — [`docs/REPRODUCING.md`](docs/REPRODUCING.md): environment, local eval, the first-divergence probe quickstart, Kaggle packaging.
+- **Explore the model** — the interactive [3D architecture explorer](https://nemotron-reasoning.pages.dev/viz/nemotron-explorer) of the Nemotron-3-Nano MoE/Mamba stack.
 
 ## What this project investigated
 
@@ -49,116 +60,21 @@ Several early conclusions turned out to be confounded experiments; catching and 
 ## Where to go deeper
 
 - [`docs/writeup.md`](docs/writeup.md) — the canonical retrospective: method, case study, runtime investigation, corrections, reproducibility.
+- [`docs/REPRODUCING.md`](docs/REPRODUCING.md) — the operational guide: environment, eval parity, the probe quickstart, adapter packaging.
 - [`RESULTS.md`](RESULTS.md) — every local eval and Kaggle submission, with the packaging ladder.
 - [`docs/investigations/OPEN_QUESTIONS.md`](docs/investigations/OPEN_QUESTIONS.md) — the single-variable experiments, negative results, and corrections (C1–C11) behind the writeup.
 - Probe scripts: [`scripts/bitmanip_logprob_probe.py`](scripts/bitmanip_logprob_probe.py), [`scripts/text_enc_logprob_probe_vllm.py`](scripts/text_enc_logprob_probe_vllm.py).
 - Trace generators and solvers: [`src/data/`](src/data/) (the case study's before/after formats are `bit_manip_trace_v4.py` and `bit_manip_trace_v5.py`).
 - MoE adapter converter: [`src/training/convert_peft_to_vllm_moe.py`](src/training/convert_peft_to_vllm_moe.py).
 
-**Publication status:** this repository is a public snapshot of a private working repo, which retains the full investigation history — see the repository-state note in [`docs/writeup.md` §10](docs/writeup.md#10-reproducibility). Third-party provenance and what was removed before publication (competition data, reference material) are documented in [`references/README.md`](references/README.md).
-
----
-
-## Using this repository
-
-### Setup
+## Reproducing
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env  # fill in credentials
-```
-
-### Quick start
-
-```bash
 make eval SPLIT=dev_frozen
 ```
 
-**Data:** competition data is not redistributed here — regenerate the frozen eval splits from Kaggle's `train.csv` via `src/data/split.py` (seed-42, deterministic); see [`datasets/splits/README.md`](datasets/splits/README.md).
+That's the local eval on its defaults. The full operational guide — credentials/data setup, eval parameters that match the Kaggle harness (the local defaults do **not**), the first-divergence probe quickstart, and adapter packaging (convert → pad → rekey) with its runtime caveats — is [`docs/REPRODUCING.md`](docs/REPRODUCING.md).
 
-### Layout
-
-```
-src/           solvers, trace generators, training, evaluation, packaging (src/data, src/evaluation, src/training, …)
-scripts/       one-off diagnostics and pipeline drivers (logprob probes, converters' round-trip check, build scripts)
-configs/       training / eval / inference YAML configs
-prompts/       prompt templates by strategy
-docs/          the canonical writeup, session log, and docs/investigations/ (corrections, parity reports)
-datasets/      training mixes and eval splits (competition-derived files not redistributed; regenerate via src/data/split.py)
-runs/          training and eval artifacts (large files gitignored)
-references/    third-party reference material — provenance documented in references/README.md
-reports/       observation and progress logs kept during the competition
-tests/         unit and regression tests
-```
-
-### Task types
-
-| Task type                | Example answer format         |
-|--------------------------|-------------------------------|
-| bit_manipulation         | binary string, e.g. `10011000` |
-| gravitational_constant   | numeric, e.g. `9.81`          |
-| unit_conversion          | numeric, e.g. `24.64`         |
-| text_encryption          | string, e.g. `khoor`          |
-| numeral_conversion       | string/number, e.g. `XLVII`   |
-| equation_transformation  | symbolic string, e.g. `a+b`   |
-
-### Eval parameters
-
-Confirmed Kaggle harness parameters (competition Overview tab; the rows marked * are additionally confirmed from the competition metric's deployed code, which is not redistributed here). The eval is **greedy** (temperature 0.0):
-
-| Parameter                | Value        |
-|--------------------------|--------------|
-| temperature              | 0.0 (greedy) |
-| top_p                    | 1.0          |
-| max_tokens               | 7680         |
-| max_model_len            | 8192         |
-| max_num_seqs             | 64           |
-| max_lora_rank            | 32           |
-| gpu_memory_utilization   | 0.85         |
-| enable_thinking *        | True         |
-| trust_remote_code *      | True         |
-| enable_prefix_caching *  | True         |
-| enable_chunked_prefill * | True         |
-| dtype *                  | 'auto'       |
-
-> **Reproducing locally:** pass these explicitly — the `run_eval` / `make eval` defaults are *not* these values, so a default local run does not reproduce Kaggle conditions.
-
-> **⚠️ Runtime / vLLM-version caveat.** The same byte-identical adapter can score very differently depending on the vLLM version running it. We observed a ~25pp swing on `text_encryption` for one adapter across local vLLM 0.20.1 vs 0.22.1, and Kaggle runs vLLM **0.17.1** (user-reported; distinct from both, not reproducible on our hosts). Consequences: (1) a strong *local* score does not guarantee the Kaggle score — validate against the target runtime; (2) packaging must match what that runtime's LoRA loader expects (see "Packaging an adapter for Kaggle" below). Full diagnosis in [`docs/writeup.md` §6](docs/writeup.md#6-failure-to-translate-and-the-runtime-investigation) and `docs/investigations/` (corrections C7, C9–C11).
-
-The harness appends to every prompt:
-
-```
-Please put your final answer inside `\boxed{}`. For example: `\boxed{your answer}`
-```
-
-### Submission format
-
-A LoRA adapter (rank ≤ 32) for `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16`, packaged as `submission.zip` containing `adapter_config.json` and adapter weights. Build with:
-
-```bash
-make package ADAPTER=runs/train/lora_baseline
-```
-
-### Packaging an adapter for Kaggle (convert → pad → rekey)
-
-A PEFT `target_parameters` LoRA on NemotronH's routed experts is **not** directly loadable by Kaggle's vLLM — the 3D packed expert weights must be unpacked and the config canonicalized. Three CPU-only steps:
-
-1. **Convert** — unpack the 3D packed expert LoRA into per-expert 2D tensors:
-   ```bash
-   python -m src.training.convert_peft_to_vllm_moe --src <peft_adapter> --dst <out>_vllm
-   ```
-   The converter emits `target_modules` as a **list** (not a regex string). This is load-bearing: Kaggle's vLLM 0.17.1 silently under-applies the LoRA when `target_modules` is a regex (≈ −2pp; corrections C9/C10). It also nulls the PEFT-3D training fields and validates the 23-MoE-layer coverage.
-
-2. **Pad** — make every expert rank uniform (e.g. r8 → r32) so it matches the global rank (`rank_pattern={}` declares uniform):
-   ```bash
-   python -m src.training.pad_lora_to_uniform_rank --src <out>_vllm --dst <out>_r32padded --target-rank 32
-   ```
-
-3. **Rekey (optional)** — rename keys to the `base_model.model.backbone.` prefix to match the reference layout:
-   ```bash
-   python -m scripts.rekey_to_backbone_reference --src <out>_r32padded --dst <out>_r32padded_backbone
-   ```
-   Empirically the prefix is **noise** on Kaggle (≤1pp, sign-inconsistent); the load-bearing fix is the list `target_modules` from step 1.
-
-Then zip the three files — `adapter_config.json`, `adapter_model.safetensors`, `chat_template.jinja` — **flat at the archive root**, under the 1.5 GB submission cap. Full packaging investigation (mixed-rank mis-load, target_modules format, prefix) in `docs/investigations/` (corrections C8–C11) and [`docs/investigations/OPEN_QUESTIONS.md`](docs/investigations/OPEN_QUESTIONS.md).
+**Publication status:** this repository is a public snapshot of a private working repo, which retains the full investigation history — see the repository-state note in [`docs/writeup.md` §10](docs/writeup.md#10-reproducibility). Third-party provenance and what was removed before publication (competition data, reference material) are documented in [`references/README.md`](references/README.md).

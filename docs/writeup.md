@@ -4,6 +4,8 @@
 
 Public LB: 0.58 · Private LB (final): 0.604 · Rank: 3488/4182
 
+*Reading paths: the 5-minute version is the [README](../README.md) · reproduction and packaging are in [`REPRODUCING.md`](REPRODUCING.md) · the model itself is browsable in the [3D architecture explorer](https://nemotron-reasoning.pages.dev/viz/nemotron-explorer).*
+
 ---
 
 ## 1. Executive Summary
