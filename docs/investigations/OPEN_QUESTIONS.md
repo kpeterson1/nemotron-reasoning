@@ -11,6 +11,11 @@ test that resolves each, and the evidence. It is the single source of truth for
   (each with the prediction that confirms/refutes it), **Test**, **Evidence**
   (run-artifact filenames / log paths / SHAs), **Resolution**.
 - `Status` is one of: `open`, `investigating`, `resolved`.
+- *2026-08-07 status pass (post-competition):* entries additionally carry one of
+  `resolved` / `partially resolved` / `unresolved` /
+  `blocked by unavailable Kaggle runtime parity`, reflecting end-of-project
+  state. These labels annotate the **Status** line and glossary index only;
+  no Resolution text was edited.
 - When a question is resolved, **move** the whole entry from `## Open` to
   `## Resolved` (do not delete it) and fill in **Resolution** with the answer,
   the evidence that settled it, and the date/SHA.
@@ -43,16 +48,16 @@ reader's map. (Definitions drawn from this file, `docs/SESSION_LOG.md`, and
 
 **Questions (Q#) — one-liner each:**
 - **Q1** *(resolved)* — does local vLLM apply the MoE expert LoRA keys? Yes (+10.4pp).
-- **Q3** *(investigating)* — why do the trained experts contribute weakly on Kaggle?
+- **Q3** *(partially resolved; remainder blocked by unavailable Kaggle runtime parity)* — why do the trained experts contribute weakly on Kaggle?
 - **Q3a** *(resolved)* — is the gap a key-prefix mismatch? No (within noise locally).
-- **Q3b** *(open)* — the ~4pp non-expert transfer loss (experts-zeroed 0.590 local → 0.55 Kaggle).
-- **Q3c** *(resolved)* — is the converter's expert-B reshape correct? It was transposed (real bug); see C11 for the reconciliation of its score effect.
-- **Q4** *(open)* — does Kaggle accept a raw (pre-conversion) PEFT adapter?
-- **Q5** *(open)* — the recipe gap to the leaders (86–87%).
-- **Q6** *(open)* — solver/rule coverage on the weak categories.
-- **Q7** *(open)* — recover a valid Huikang submitted adapter for layout comparison.
+- **Q3b** *(blocked by unavailable Kaggle runtime parity)* — the ~4pp non-expert transfer loss (experts-zeroed 0.590 local → 0.55 Kaggle).
+- **Q3c** *(resolved — correctness; score-effect claim superseded by C11)* — is the converter's expert-B reshape correct? It was transposed (real bug); see C11 for the reconciliation of its score effect.
+- **Q4** *(blocked by unavailable Kaggle runtime parity)* — does Kaggle accept a raw (pre-conversion) PEFT adapter?
+- **Q5** *(unresolved)* — the recipe gap to the leaders (86–87%).
+- **Q6** *(partially resolved)* — solver/rule coverage on the weak categories.
+- **Q7** *(partially resolved)* — recover a valid Huikang submitted adapter for layout comparison.
 - **Q8** *(resolved)* — bit_manip learning gap: the model couldn't reproduce a *stated* rule; a *derivation-first* trace fixed it (+16.7pp).
-- **Q9** *(open)* — v5 bit_manip traces regress text_encryption −12pp (cross-task interference).
+- **Q9** *(partially resolved)* — v5 bit_manip traces regress text_encryption −12pp (cross-task interference).
 
 > *2026-07-17: commit-SHA citations in this file were replaced with
 > dates/descriptions — they pointed into the private development history,
@@ -201,7 +206,11 @@ prefix is. CONFIRMED from artifacts: the 4-row prefix/target_modules/rank matrix
 
 ### Q3: Why do the trained MoE experts contribute weakly on Kaggle?
 
-- **Status:** investigating
+- **Status:** investigating → partially resolved; remainder blocked by
+  unavailable Kaggle runtime parity *(2026-08-07 status pass: the packaging
+  lever was isolated — C10, list `target_modules`, ~+2pp; the residual ~11pp
+  is attributed to runtime version (C7), untestable without a vLLM 0.17.1
+  environment — writeup §10: neither local host can run it)*
 - **Opened:** 2026-06-09
 - **Why it matters:** Gates whether expert-recipe / solver work can lift the
   Kaggle score, and whether local eval predicts Kaggle expert behavior at all.
@@ -229,7 +238,9 @@ prefix is. CONFIRMED from artifacts: the 4-row prefix/target_modules/rank matrix
 <a id="q5"></a>
 ### Q5: Recipe gap to leaders (86–87%).
 
-- **Status:** open
+- **Status:** open → unresolved *(2026-08-07 status pass: the hypotheses —
+  loss fn, example count, lm_head, epochs, LR — were never ablated; the
+  competition closed 2026-06-15)*
 - **Opened:** 2026-06-09
 - **Why it matters:** Defines the path to a competitive score by June 15.
 - **Hypotheses:** min-logprob/focal-CE loss unbuilt; example count ~4,468 vs
@@ -242,7 +253,11 @@ prefix is. CONFIRMED from artifacts: the 4-row prefix/target_modules/rank matrix
 <a id="q6"></a>
 ### Q6: Solver/rule-coverage on the weak three categories.
 
-- **Status:** open → ELEVATED to primary priority
+- **Status:** open → ELEVATED to primary priority → partially resolved
+  *(2026-08-07 status pass: coverage audited via
+  `scripts/audit_solver_coverage.py`, 2026-06-10 — bit_manip reframed to
+  [Q8](#q8) and resolved there; eq_trans ceiling characterized at 28.6% with
+  misses left by design; no further solver expansion was done)*
 - **Opened:** 2026-06-09
 - **Why it matters:** Now the most likely lever for Kaggle gains (per C2, the
   gap is in expert/trace quality, not runtime). bit_manip base 9.5% (89%
@@ -267,7 +282,10 @@ prefix is. CONFIRMED from artifacts: the 4-row prefix/target_modules/rank matrix
 
 ### Q3b: ~4pp non-expert transfer loss (experts-zeroed 0.590 local → 0.55 Kaggle).
 
-- **Status:** open
+- **Status:** open → blocked by unavailable Kaggle runtime parity
+  *(2026-08-07 status pass: plausibly the C7 runtime effect, but the isolating
+  test needs a vLLM 0.17.1 environment — writeup §10: neither local host can
+  run it)*
 - **Opened:** 2026-06-09
 - **Why it matters:** A separate, smaller gap on the base/non-expert path.
 - **Hypotheses:** distribution shift dev_frozen vs Kaggle test; minor numerics.
@@ -277,7 +295,9 @@ prefix is. CONFIRMED from artifacts: the 4-row prefix/target_modules/rank matrix
 
 ### Q4: Does Kaggle accept a raw 232-tensor PEFT adapter (pre-conversion)?
 
-- **Status:** open
+- **Status:** open → blocked by unavailable Kaggle runtime parity
+  *(2026-08-07 status pass: requires a Kaggle submission against the 0.17.1
+  loader; the competition closed 2026-06-15)*
 - **Opened:** 2026-06-09
 - **Why it matters:** Tests whether conversion is net-positive vs raw PEFT.
 - **Test:** submit raw adapter to Kaggle.
@@ -286,7 +306,10 @@ prefix is. CONFIRMED from artifacts: the 4-row prefix/target_modules/rank matrix
 
 ### Q7: Recover a valid Huikang submitted adapter for key-layout comparison.
 
-- **Status:** open
+- **Status:** open → partially resolved *(2026-08-07 status pass: the layout
+  comparison this question existed for was completed via
+  `references/huikang/reference_adapter/` manifests — C9/C10, 12008/12008
+  backbone + list; the submitted zip itself remains BadZipFile)*
 - **Opened:** 2026-06-09
 - **Why it matters:** Direct comparison of expert-key layout against the
   winner's working submission.
@@ -354,7 +377,10 @@ prefix is. CONFIRMED from artifacts: the 4-row prefix/target_modules/rank matrix
 <a id="q9"></a>
 ### Q9: v5 bit_manip traces regress text_encryption −12pp (cross-task interference).
 
-- **Status:** open
+- **Status:** open → partially resolved *(2026-08-07 status pass: mechanism
+  localized to assembled_map construction and mitigated by the v13 revert;
+  the shorten-v5 / raise-rank ablation was held as a single-variable test and
+  never run)*
 - **Opened:** 2026-06-10
 - **Why it matters:** Gates whether v11 (v5 bit_manip traces) can SHIP. The v5
   format won bit_manip +16.7pp but the shared LoRA lost text_encryption −12pp,
@@ -426,7 +452,9 @@ prefix is. CONFIRMED from artifacts: the 4-row prefix/target_modules/rank matrix
 
 ### Q3c: Is the converter's expert-B reshape correct?
 
-- **Status:** resolved
+- **Status:** resolved — correctness; score-effect claim superseded by C11
+  *(2026-08-07 status pass: the round-trip check confirms the transposed
+  reshape; its Kaggle effect through correct packaging remains untested — C11)*
 - **Opened:** 2026-06-09
 - **Why it matters:** A transposed reshape would scramble per-expert deltas and
   could explain the local→Kaggle expert-fidelity gap.
